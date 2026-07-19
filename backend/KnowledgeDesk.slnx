@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/InternalKnowledge.AI/InternalKnowledge.AI.csproj" />
+    <Project Path="src/InternalKnowledge.Api/InternalKnowledge.Api.csproj" />
+    <Project Path="src/InternalKnowledge.Application/InternalKnowledge.Application.csproj" />
+    <Project Path="src/InternalKnowledge.Domain/InternalKnowledge.Domain.csproj" />
+    <Project Path="src/InternalKnowledge.Indexing/InternalKnowledge.Indexing.csproj" />
+    <Project Path="src/InternalKnowledge.Infrastructure/InternalKnowledge.Infrastructure.csproj" />
+    <Project Path="src/InternalKnowledge.Persistence/InternalKnowledge.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/InternalKnowledge.UnitTests/InternalKnowledge.UnitTests.csproj" />
+  </Folder>
+</Solution>

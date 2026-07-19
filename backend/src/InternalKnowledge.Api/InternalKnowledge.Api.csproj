@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>ba6ab501-4ce7-4519-ade1-d4f64b647a35</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4"><PrivateAssets>all</PrivateAssets><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets></PackageReference>
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InternalKnowledge.Application\InternalKnowledge.Application.csproj" />
+    <ProjectReference Include="..\InternalKnowledge.Infrastructure\InternalKnowledge.Infrastructure.csproj" />
+    <ProjectReference Include="..\InternalKnowledge.Persistence\InternalKnowledge.Persistence.csproj" />
+    <ProjectReference Include="..\InternalKnowledge.AI\InternalKnowledge.AI.csproj" />
+    <ProjectReference Include="..\InternalKnowledge.Indexing\InternalKnowledge.Indexing.csproj" />
+  </ItemGroup>
+
+</Project>

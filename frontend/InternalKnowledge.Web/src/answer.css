@@ -1,0 +1,7 @@
+.answer-body{margin:16px 0 22px}
+.answer-body h3{font:600 18px Georgia,serif;line-height:1.35;margin:18px 0 7px}
+.answer-body>p{margin:8px 0}
+.answer-gap{height:6px}
+.answer-list-item{display:grid;grid-template-columns:24px 1fr;gap:5px;align-items:start;margin:7px 0;color:#53635b}
+.answer-list-item>span{font-weight:800;color:var(--green);line-height:1.65}
+.answer-list-item>p{margin:0}

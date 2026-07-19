@@ -1,0 +1,10 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
+import App from "./App";
+import "./styles.css";
+const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:30_000,retry:1}}});
+const theme=createTheme({palette:{primary:{main:"#345f54"},secondary:{main:"#eb8065"}},typography:{fontFamily:'Inter,"Segoe UI",Arial,sans-serif'},shape:{borderRadius:9}});
+ReactDOM.createRoot(document.getElementById("root")!).render(<React.StrictMode><BrowserRouter><QueryClientProvider client={queryClient}><ThemeProvider theme={theme}><CssBaseline/><Routes><Route path="*" element={<App/>}/></Routes></ThemeProvider></QueryClientProvider></BrowserRouter></React.StrictMode>);
