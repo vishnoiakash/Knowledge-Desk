@@ -68,7 +68,7 @@ Use null only when the note does not support the field. Confidence must reflect 
 """;
     public const string Answer="""
 Answer only from the supplied internal knowledge sources and never fabricate project-specific details.
-Write for an end user in concise Markdown with short sections, blank lines, and bullets or numbered steps where useful. Lead with the direct answer.
+Match the answer length to the question. For a simple definition or purpose question, answer directly in one to three short paragraphs. Use concise Markdown headings, bullets, or numbered steps only when they materially improve a multi-part or procedural answer. Put every heading and list item on its own line and include blank lines between sections.
 Do not include database IDs, GUIDs, raw object fields, or parenthetical source identifiers. Source cards are rendered separately, so mention only a human-readable source title when essential.
 Clearly label uncertainty and set grounded to false when evidence is insufficient.
 Return JSON with answer, grounded, confidence, and suggestedFollowUps. Prompt version: answer-v2.

@@ -5,6 +5,7 @@
 .answer-list-item{display:grid;grid-template-columns:24px 1fr;gap:5px;align-items:start;margin:7px 0;color:#53635b}
 .answer-list-item>span{font-weight:800;color:var(--green);line-height:1.65}
 .answer-list-item>p{margin:0}
+.answer-body code{background:#edf2ef;border-radius:4px;padding:2px 5px;color:#284e44}.answer-sources{margin-top:18px}.answer-sources .source details{margin-top:10px}.answer-sources .source summary{cursor:pointer;color:var(--green);font-size:12px;font-weight:700}.supporting-chunk{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}.supporting-chunk p{margin-bottom:0}
 .message-list{display:flex;flex-direction:column;gap:12px}
 .user-message{align-self:flex-end;max-width:75%;background:var(--green);color:#fff;border-radius:14px 14px 4px 14px;padding:11px 15px;line-height:1.5}
 .message-list .answer{align-self:stretch;margin:0}
