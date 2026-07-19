@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\InternalKnowledge.Domain\InternalKnowledge.Domain.csproj" />
     <ProjectReference Include="..\..\src\InternalKnowledge.Application\InternalKnowledge.Application.csproj" />
     <ProjectReference Include="..\..\src\InternalKnowledge.AI\InternalKnowledge.AI.csproj" />
+    <ProjectReference Include="..\..\src\InternalKnowledge.Persistence\InternalKnowledge.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

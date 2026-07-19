@@ -1,18 +1,14 @@
 export type EntryType="Issue"|"Workflow"|"Knowledge"|"Troubleshooting"|"HowTo"|"Decision"|"KnownLimitation";
-export interface KnowledgeEntry{id:string;entryType:EntryType;title:string;summary:string;originalInput:string;problem?:string;rootCause?:string;solution?:string;prevention?:string;detailedContent?:string;category?:string;severity:"Low"|"Medium"|"High"|"Critical";project?:string;module?:string;affectedService?:string;confidenceScore:number;status:"Draft"|"Active"|"NeedsReview"|"Archived";tags:string[];technologies:string[];createdAt:string;updatedAt:string}
-export interface SimilarEntry{knowledgeEntryId:string;title:string;summary:string;similarity:number}
-export interface AnalysisResult{entry:KnowledgeEntry;missingInformation:string[];suggestedQuestions:string[];potentialDuplicates:SimilarEntry[]}
-export interface AskResult{answer:string;grounded:boolean;confidence:number;sources:SimilarEntry[];suggestedFollowUps:string[]}
-export interface ChatTurn{role:"user"|"assistant";content:string}
+export type Status="Draft"|"Active"|"NeedsReview"|"Archived"; export type Severity="Low"|"Medium"|"High"|"Critical";
+export interface KnowledgeEntry{id:string;entryType:EntryType;title:string;summary:string;originalInput:string;problem?:string;rootCause?:string;solution?:string;prevention?:string;detailedContent?:string;category?:string;severity:Severity;project?:string;module?:string;affectedService?:string;confidenceScore:number;status:Status;tags:string[];technologies:string[];createdAt:string;updatedAt:string}
+export interface SearchResult{knowledgeEntryId:string;chunkId:string;chunkType:string;title:string;summary:string;problem?:string;rootCause?:string;solution?:string;prevention?:string;detailedContent?:string;project?:string;module?:string;snippet:string;similarity:number}
+export interface AnalysisResult{entry:KnowledgeEntry;suggestedEntries:KnowledgeEntry[];missingInformation:string[];suggestedQuestions:string[];potentialDuplicates:SearchResult[]}
+export interface Citation{knowledgeEntryId:string;chunkId:string;title:string;chunkType:string;snippet:string;similarity:number}
+export interface AskResult{answer:string;grounded:boolean;confidence:number;sources:Citation[];suggestedFollowUps:string[]}
+export interface ChatTurn{role:"user"|"assistant";content:string} export interface PagedResult<T>{items:T[];page:number;pageSize:number;totalCount:number;totalPages:number}
+export interface Revision{id:string;knowledgeEntryId:string;revisionNumber:number;snapshotJson:string;createdAt:string}
+export interface ListQuery{query?:string;entryType?:EntryType|"";project?:string;module?:string;severity?:Severity|"";status?:Status|"";technology?:string;tag?:string;sort?:string;page?:number;pageSize?:number;includeArchived?:boolean}
 const base=(import.meta.env.VITE_API_URL??"").replace(/\/$/,"");
-async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch(`${base}${path}`,{...init,headers:{"Content-Type":"application/json",...init?.headers}});if(!response.ok){const body=await response.json().catch(()=>null);throw new Error(body?.title??body?.detail??`Request failed (${response.status})`)}if(response.status===204)return undefined as T;return response.json() as Promise<T>}
-export interface AnalyzeInput { rawInput:string; entryType:EntryType; project?:string; module?:string }
-export const knowledgeApi={
- list:(query="")=>request<KnowledgeEntry[]>(`/api/knowledge?query=${encodeURIComponent(query)}&page=1&pageSize=100`),
- get:(id:string)=>request<KnowledgeEntry>(`/api/knowledge/${id}`),
- analyze:(input:AnalyzeInput)=>request<AnalysisResult>("/api/knowledge/analyze",{method:"POST",body:JSON.stringify(input)}),
- create:(entry:KnowledgeEntry)=>request<KnowledgeEntry>("/api/knowledge",{method:"POST",body:JSON.stringify(entry)}),
- update:(entry:KnowledgeEntry)=>request<KnowledgeEntry>(`/api/knowledge/${entry.id}`,{method:"PUT",body:JSON.stringify(entry)}),
- archive:(id:string)=>request<void>(`/api/knowledge/${id}/archive`,{method:"POST"}),
- ask:(question:string,history:ChatTurn[]=[],project?:string,module?:string)=>request<AskResult>("/api/assistant/ask",{method:"POST",body:JSON.stringify({question,project,module,history})})
-};
+async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch(`${base}${path}`,{...init,headers:{"Content-Type":"application/json",...init?.headers}});if(!response.ok){const body=await response.json().catch(()=>null);throw new Error(body?.message??body?.title??body?.detail??`Request failed (${response.status})`)}if(response.status===204)return undefined as T;return response.json() as Promise<T>}
+const qs=(values:Record<string,unknown>)=>{const p=new URLSearchParams();Object.entries(values).forEach(([k,v])=>{if(v!==undefined&&v!==null&&v!=="")p.set(k,String(v))});return p.toString()};
+export const knowledgeApi={list:(q:ListQuery={})=>request<PagedResult<KnowledgeEntry>>(`/api/knowledge?${qs({page:1,pageSize:20,...q})}`),get:(id:string)=>request<KnowledgeEntry>(`/api/knowledge/${id}`),analyze:(input:{rawInput:string;entryType:EntryType;project?:string;module?:string})=>request<AnalysisResult>("/api/knowledge/analyze",{method:"POST",body:JSON.stringify(input)}),create:(entry:KnowledgeEntry,allowDuplicate=false)=>request<KnowledgeEntry>(`/api/knowledge?allowDuplicate=${allowDuplicate}`,{method:"POST",body:JSON.stringify(entry)}),update:(entry:KnowledgeEntry)=>request<KnowledgeEntry>(`/api/knowledge/${entry.id}`,{method:"PUT",body:JSON.stringify(entry)}),archive:(id:string)=>request<KnowledgeEntry>(`/api/knowledge/${id}/archive`,{method:"POST"}),restore:(id:string)=>request<KnowledgeEntry>(`/api/knowledge/${id}/restore`,{method:"POST"}),revisions:(id:string)=>request<Revision[]>(`/api/knowledge/${id}/revisions`),ask:(question:string,history:ChatTurn[]=[],project?:string,module?:string)=>request<AskResult>("/api/assistant/ask",{method:"POST",body:JSON.stringify({question,project,module,history})})};

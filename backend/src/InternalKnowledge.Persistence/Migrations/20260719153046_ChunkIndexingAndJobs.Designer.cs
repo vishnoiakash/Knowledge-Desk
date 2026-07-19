@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using InternalKnowledge.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -13,9 +14,11 @@ using Pgvector;
 namespace InternalKnowledge.Persistence.Migrations
 {
     [DbContext(typeof(KnowledgeDbContext))]
-    partial class KnowledgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260719153046_ChunkIndexingAndJobs")]
+    partial class ChunkIndexingAndJobs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -132,9 +135,6 @@ namespace InternalKnowledge.Persistence.Migrations
                     b.Property<string>("LastError")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset?>("LeaseExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("MaxAttempts")
                         .HasColumnType("integer");
 
@@ -150,10 +150,7 @@ namespace InternalKnowledge.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("KnowledgeEntryId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_IndexingJobs_ActiveEntry")
-                        .HasFilter("\"Status\" IN ('Pending','Processing')");
+                    b.HasIndex("KnowledgeEntryId");
 
                     b.HasIndex("Status", "NextAttemptAt");
 
@@ -203,9 +200,6 @@ namespace InternalKnowledge.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("KnowledgeEntryId", "RevisionNumber")
-                        .IsUnique();
 
                     b.ToTable("KnowledgeRevisions", (string)null);
                 });

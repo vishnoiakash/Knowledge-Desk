@@ -10,15 +10,32 @@ public sealed class KnowledgeAnalysisService(ILLMService llm,ISemanticSearchServ
 {
     public async Task<AnalysisResult> AnalyzeAsync(AnalyzeKnowledgeRequest request,CancellationToken ct)
     {
-        KnowledgeEntry entry; List<string> missing=[]; List<string> questions=[];
+        List<KnowledgeEntry> entries;List<string> missing=[];List<string> questions=[];
         if(options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))
-        { var raw=await llm.CompleteAsync("knowledge-extraction",request,ct); using var doc=JsonDocument.Parse(raw); entry=Map(doc.RootElement,request); missing=ReadStrings(doc.RootElement,"missingInformation"); questions=ReadStrings(doc.RootElement,"suggestedQuestions"); }
-        else entry=LocalAnalyze(request,missing,questions);
-        var duplicates=await search.SearchAsync(BuildSearchable(entry),5,request.Project,request.Module,ct); return new(entry,missing,questions,duplicates.Where(x=>x.Similarity>=options.Value.DuplicateSimilarityThreshold).ToArray());
+        {
+            var raw=await llm.CompleteAsync("knowledge-extraction",request,ct);using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;
+            entries=root.TryGetProperty("entries",out var list)&&list.ValueKind==JsonValueKind.Array?list.EnumerateArray().Select(x=>Map(x,request)).ToList():[Map(root,request)];missing=ReadStrings(root,"missingInformation");questions=ReadStrings(root,"suggestedQuestions");
+        }
+        else entries=LocalAnalyzeMany(request,missing,questions);
+        if(entries.Count==0)entries=[LocalEntry(request,request.RawInput)];var primary=entries[0];var duplicates=await search.SearchAsync(BuildSearchable(primary),5,request.Project,request.Module,ct);
+        return new(primary,entries,missing,questions,duplicates.Where(x=>x.Similarity>=options.Value.DuplicateSimilarityThreshold).GroupBy(x=>x.KnowledgeEntryId).Select(x=>x.OrderByDescending(y=>y.Similarity).First()).ToArray());
     }
-    private static KnowledgeEntry LocalAnalyze(AnalyzeKnowledgeRequest r,List<string> missing,List<string> questions){var premium=r.RawInput.Contains("premium",StringComparison.OrdinalIgnoreCase)&&r.RawInput.Contains("age",StringComparison.OrdinalIgnoreCase);if(!premium){missing.Add("Confirmed root cause and solution may require review");questions.Add("What exact change resolved the issue?");}return new(){EntryType=r.EntryType,OriginalInput=r.RawInput,Project=r.Project,Module=r.Module,Title=premium?"Incorrect age calculation causing premium mismatch":r.RawInput.Split('.')[0][..Math.Min(r.RawInput.Split('.')[0].Length,120)],Summary=r.RawInput[..Math.Min(r.RawInput.Length,500)],Problem=premium?"Premium returned by the insurer differed from the expected premium.":null,RootCause=premium?"Age calculation used the current date instead of the policy start date.":null,Solution=premium?"Use the policy start date for age calculation.":null,Prevention=premium?"Add automated tests for boundary ages.":null,Category=premium?"Business Logic":"Engineering",ConfidenceScore=premium?.9m:.55m,Tags=premium?["Premium","Age Calculation","Insurer Integration"]:[r.EntryType.ToString()]};}
-    private static KnowledgeEntry Map(JsonElement j,AnalyzeKnowledgeRequest r)=>new(){EntryType=r.EntryType,OriginalInput=r.RawInput,Project=Get(j,"project")??r.Project,Module=Get(j,"module")??r.Module,Title=Get(j,"title")??"Untitled knowledge",Summary=Get(j,"summary")??r.RawInput,Problem=Get(j,"problem"),RootCause=Get(j,"rootCause"),Solution=Get(j,"solution"),Prevention=Get(j,"prevention"),DetailedContent=Get(j,"detailedContent"),Category=Get(j,"category"),AffectedService=Get(j,"affectedService"),ConfidenceScore=j.TryGetProperty("confidenceScore",out var c)&&c.TryGetDecimal(out var d)?d:.5m,Tags=ReadStrings(j,"tags"),Technologies=ReadStrings(j,"technologies")};
-    private static string? Get(JsonElement j,string n)=>j.TryGetProperty(n,out var v)&&v.ValueKind==JsonValueKind.String?v.GetString():null; private static List<string> ReadStrings(JsonElement j,string n)=>j.TryGetProperty(n,out var v)&&v.ValueKind==JsonValueKind.Array?v.EnumerateArray().Select(x=>x.GetString()).Where(x=>x is not null).Cast<string>().ToList():[];
+    private static List<KnowledgeEntry> LocalAnalyzeMany(AnalyzeKnowledgeRequest request,List<string> missing,List<string> questions)
+    {
+        var sections=request.RawInput.Split(["\r\n\r\n","\n\n"],StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries);var substantial=sections.Where(x=>x.Length>=20).ToArray();var candidates=substantial.Length>1&&substantial.All(LooksLikeIndependentProblem)?substantial:[request.RawInput];
+        if(candidates.Length==1){missing.Add("Confirmed root cause and solution may require review");questions.Add("What exact change resolved the issue?");}
+        return candidates.Select(x=>LocalEntry(request,x)).ToList();
+    }
+    private static bool LooksLikeIndependentProblem(string text){var value=text.ToLowerInvariant();return value.Contains(" failed")||value.Contains("failure")||value.Contains(" error")||value.Contains(" issue")||value.Contains(" because ")||value.Contains(" mismatch")||value.Contains(" timeout");}
+    private static KnowledgeEntry LocalEntry(AnalyzeKnowledgeRequest r,string text)
+    {
+        var lower=text.ToLowerInvariant();var causeAt=lower.IndexOf(" because ",StringComparison.Ordinal);var fixedAt=lower.IndexOf(" fixed ",StringComparison.Ordinal);if(fixedAt<0)fixedAt=lower.IndexOf(" resolved ",StringComparison.Ordinal);
+        var title=text.Split(['.','\n'],StringSplitOptions.RemoveEmptyEntries)[0];
+        return new(){EntryType=r.EntryType,OriginalInput=text,Project=r.Project,Module=r.Module,Title=title[..Math.Min(title.Length,120)],Summary=text[..Math.Min(text.Length,500)],Problem=causeAt>0?text[..causeAt].Trim():null,RootCause=causeAt>=0?text[(causeAt+9)..(fixedAt>causeAt?fixedAt:text.Length)].Trim(' ','.'):null,Solution=fixedAt>=0?text[fixedAt..].Trim(' ','.'):null,Prevention=lower.Contains("test")?text[(lower.LastIndexOf(" and ",StringComparison.Ordinal)+5)..].Trim(' ','.'):null,Category="Engineering",ConfidenceScore=causeAt>=0&&fixedAt>=0?.85m:.55m,Tags=[r.EntryType.ToString()]};
+    }
+    private static KnowledgeEntry Map(JsonElement j,AnalyzeKnowledgeRequest r)=>new(){EntryType=r.EntryType,OriginalInput=Get(j,"originalInput")??r.RawInput,Project=Get(j,"project")??r.Project,Module=Get(j,"module")??r.Module,Title=Get(j,"title")??"Untitled knowledge",Summary=Get(j,"summary")??r.RawInput,Problem=Get(j,"problem","problemStatement"),RootCause=Get(j,"rootCause","root_cause"),Solution=Get(j,"solution","resolution"),Prevention=Get(j,"prevention","preventiveAction"),DetailedContent=Get(j,"detailedContent","details"),Category=Get(j,"category"),AffectedService=Get(j,"affectedService"),ConfidenceScore=j.TryGetProperty("confidenceScore",out var c)&&c.TryGetDecimal(out var d)?d:.5m,Tags=ReadStrings(j,"tags"),Technologies=ReadStrings(j,"technologies")};
+    private static string? Get(JsonElement j,params string[] names){foreach(var name in names)if(j.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.String)return value.GetString();return null;}
+    private static List<string> ReadStrings(JsonElement j,string name)=>j.TryGetProperty(name,out var v)&&v.ValueKind==JsonValueKind.Array?v.EnumerateArray().Select(x=>x.GetString()).Where(x=>x is not null).Cast<string>().ToList():[];
     public static string BuildSearchable(KnowledgeEntry e)=>string.Join("\n",new[]{e.Title,e.Summary,e.Problem,e.RootCause,e.Solution,e.Prevention,e.DetailedContent,e.Project,e.Module,string.Join(' ',e.Tags),string.Join(' ',e.Technologies)}.Where(x=>!string.IsNullOrWhiteSpace(x)));
 }
 
@@ -26,20 +43,9 @@ public sealed class KnowledgeAnswerService(ILLMService llm,ISemanticSearchServic
 {
     public async Task<AskResult> AskAsync(AskRequest request,CancellationToken ct)
     {
-        var priorUserQuestions=(request.History??[]).Where(x=>x.Role.Equals("user",StringComparison.OrdinalIgnoreCase)).TakeLast(2).Select(x=>x.Content);
-        var searchQuery=string.Join("\n",priorUserQuestions.Append(request.Question));
-        var sources=await search.SearchAsync(searchQuery,options.Value.MaxRetrievedItems,request.Project,request.Module,ct);
-        var useful=sources.Where(x=>x.Similarity>=options.Value.MinimumSimilarityThreshold).ToArray();
-        if(useful.Length==0)return new("I don’t have enough reliable internal knowledge to answer that yet.",false,0,[],["Would you like to log what your team already knows about this?"]);
-        if(!options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))return new($"Based on **{useful[0].Title}**:\n\n{useful[0].Summary}",true,useful[0].Similarity,useful,["What prevention steps are documented?","Are there related entries?"]);
-        var promptSources=useful.Select(x=>new{x.Title,x.Summary,x.Similarity});
-        var allHistory=request.History??[];
-        var recentHistory=allHistory.TakeLast(4);
-        var eligibleOlderHistory=allHistory.Take(Math.Max(0,allHistory.Count-4)).TakeLast(2).Where(x=>x.Content.Length<=2000);
-        var history=eligibleOlderHistory.Concat(recentHistory).Select(x=>new{x.Role,x.Content});
-        var raw=await llm.CompleteAsync("knowledge-answer",new{request.Question,conversationHistory=history,sources=promptSources},ct);
-        using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;var answer=RemoveInternalIds(root.GetProperty("answer").GetString()??"");
-        return new(answer,root.GetProperty("grounded").GetBoolean(),root.TryGetProperty("confidence",out var c)?c.GetDouble():useful[0].Similarity,useful,root.TryGetProperty("suggestedFollowUps",out var f)?f.EnumerateArray().Select(x=>x.GetString()??"").ToArray():[]);
+        var priorUserQuestions=(request.History??[]).Where(x=>x.Role.Equals("user",StringComparison.OrdinalIgnoreCase)).TakeLast(2).Select(x=>x.Content);var searchQuery=string.Join("\n",priorUserQuestions.Append(request.Question));var sources=await search.SearchAsync(searchQuery,options.Value.MaxRetrievedItems,request.Project,request.Module,ct);var useful=sources.Where(x=>x.Similarity>=options.Value.MinimumSimilarityThreshold).ToArray();if(useful.Length==0)return new("I don’t have enough reliable internal knowledge to answer that yet.",false,0,[],["Would you like to log what your team already knows about this?"]);
+        var citations=useful.Select(x=>new Citation(x.KnowledgeEntryId,x.ChunkId,x.Title,x.ChunkType,x.Snippet,x.Similarity)).ToArray();if(!options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))return new($"Based on **{useful[0].Title}** ({useful[0].ChunkType}):\n\n{useful[0].Snippet}",true,useful[0].Similarity,citations,["What related root cause or prevention is documented?"]);
+        var allHistory=request.History??[];var recent=allHistory.TakeLast(4);var older=allHistory.Take(Math.Max(0,allHistory.Count-4)).TakeLast(2).Where(x=>x.Content.Length<=2000);var history=older.Concat(recent).Select(x=>new{x.Role,x.Content});var promptSources=useful.Select(x=>new{x.Title,x.ChunkType,x.Snippet,x.Problem,x.RootCause,x.Solution,x.Prevention,x.DetailedContent,x.Project,x.Module,x.Similarity});var raw=await llm.CompleteAsync("knowledge-answer",new{request.Question,conversationHistory=history,sources=promptSources},ct);using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;var answer=RemoveInternalIds(root.GetProperty("answer").GetString()??"");return new(answer,root.GetProperty("grounded").GetBoolean(),root.TryGetProperty("confidence",out var c)?c.GetDouble():useful[0].Similarity,citations,root.TryGetProperty("suggestedFollowUps",out var f)?f.EnumerateArray().Select(x=>x.GetString()??"").ToArray():[]);
     }
     internal static string RemoveInternalIds(string answer)=>Regex.Replace(answer,@"\s*,?\s*ID:\s*[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}","",RegexOptions.IgnoreCase);
 }

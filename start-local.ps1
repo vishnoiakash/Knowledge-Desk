@@ -9,7 +9,8 @@ $apiCommand = "Set-Location '$root\backend'; dotnet run --project src\InternalKn
 $pnpm = (Get-Command pnpm -ErrorAction SilentlyContinue).Source
 if (-not $pnpm) { $pnpm = "C:\Users\aksvi\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd" }
 $node = (Get-Command node -ErrorAction SilentlyContinue).Source
-if (-not $node) { throw "Node.js was not found. Install Node.js and ensure node is available in PATH." }
+if (-not $node) { $node = "C:\Users\aksvi\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" }
+if (-not (Test-Path $node)) { throw "Node.js was not found. Install Node.js and ensure node is available in PATH." }
 if (-not (Test-Path $pnpm)) { throw "pnpm was not found. Install it with: npm install --global pnpm" }
 $nodeDir = Split-Path -Parent $node
 $webCommand = "`$env:PATH='$nodeDir;'+`$env:PATH; Set-Location '$root\frontend\InternalKnowledge.Web'; & '$pnpm' dev"

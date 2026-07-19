@@ -39,10 +39,10 @@ static class LocalEmbedding
 static class Prompts
 {
     public const string Extraction="""
-Convert an internal engineering note into one structured knowledge JSON object.
+Convert an internal engineering note into one or more structured knowledge entries. Split independent problems into separate entries; keep one entry when the note describes one problem.
 
 Return every key in exactly this camelCase shape:
-{
+{"entries": [{
   "title": "short descriptive title",
   "summary": "concise overview",
   "problem": "observed error or user impact, or null",
@@ -59,7 +59,7 @@ Return every key in exactly this camelCase shape:
   "technologies": [],
   "missingInformation": [],
   "suggestedQuestions": []
-}
+}], "missingInformation": [], "suggestedQuestions": []}
 
 For an Issue or Troubleshooting entry, actively separate the symptom into problem, the stated reason into rootCause, the corrective action into solution, and a future safeguard into prevention.
 Do not omit keys. Do not copy the entire note into every field. Never invent unsupported project-specific facts.
