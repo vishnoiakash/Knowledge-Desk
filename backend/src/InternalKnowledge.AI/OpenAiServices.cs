@@ -38,7 +38,34 @@ static class LocalEmbedding
 
 static class Prompts
 {
-    public const string Extraction="""You convert internal engineering notes into structured knowledge. Return one JSON object matching the requested fields. Never invent a root cause or solution. Use null when unknown. Include missingInformation and suggestedQuestions. Confidence must reflect evidence in the input. Prompt version: extraction-v1.""";
+    public const string Extraction="""
+Convert an internal engineering note into one structured knowledge JSON object.
+
+Return every key in exactly this camelCase shape:
+{
+  "title": "short descriptive title",
+  "summary": "concise overview",
+  "problem": "observed error or user impact, or null",
+  "rootCause": "cause stated or directly supported by the note, or null",
+  "solution": "corrective action stated or directly supported by the note, or null",
+  "prevention": "preventive action stated or directly supported by the note, or null",
+  "detailedContent": "useful supporting details, or null",
+  "category": "short category, or null",
+  "affectedService": "service name, or null",
+  "project": "project from input, or null",
+  "module": "module from input, or null",
+  "confidenceScore": 0.0,
+  "tags": [],
+  "technologies": [],
+  "missingInformation": [],
+  "suggestedQuestions": []
+}
+
+For an Issue or Troubleshooting entry, actively separate the symptom into problem, the stated reason into rootCause, the corrective action into solution, and a future safeguard into prevention.
+Do not omit keys. Do not copy the entire note into every field. Never invent unsupported project-specific facts.
+A directly implied corrective action is allowed when it is the clear inverse of the stated cause—for example, a missing or invalid API key implies supplying a valid API key.
+Use null only when the note does not support the field. Confidence must reflect the supplied evidence. Prompt version: extraction-v2.
+""";
     public const string Answer="""
 Answer only from the supplied internal knowledge sources and never fabricate project-specific details.
 Write for an end user in concise Markdown with short sections, blank lines, and bullets or numbered steps where useful. Lead with the direct answer.
