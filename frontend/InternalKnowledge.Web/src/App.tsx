@@ -33,7 +33,7 @@ export default function Home() {
       <div className="brand"><div className="brandmark">K</div><div className="brandtext"><strong>Knowledge Desk</strong><span>Engineering intelligence</span></div></div>
       <nav>{nav.map(item => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => setPage(item.label)}><span className="navicon">{item.icon}</span><span>{item.label}</span></button>)}</nav>
       <div className="future"><p>COMING LATER</p>{["Code Intelligence", "Jira", "Documents"].map(x => <div key={x}><span>○</span><span>{x}</span></div>)}</div>
-      <div className="sidebar-foot"><div className="avatar">AK</div><div><strong>Akash Kumar</strong><span>Engineering</span></div><button aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}>‹</button></div>
+      <div className="sidebar-foot"><div className="avatar">AV</div><div><strong>Akash Vishnoi</strong><span>Engineering</span></div><button aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}>‹</button></div>
     </aside>
     <main>
       <header><button className="mobile-menu" onClick={() => setCollapsed(!collapsed)}>☰</button><div className="global-search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} onFocus={() => setPage("Knowledge Base")} placeholder="Search knowledge, projects, or ask a question…"/><kbd>⌘ K</kbd></div><button className="icon-button">?</button><button className="icon-button">♢</button></header>
