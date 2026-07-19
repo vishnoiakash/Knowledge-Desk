@@ -3,6 +3,7 @@ export interface KnowledgeEntry{id:string;entryType:EntryType;title:string;summa
 export interface SimilarEntry{knowledgeEntryId:string;title:string;summary:string;similarity:number}
 export interface AnalysisResult{entry:KnowledgeEntry;missingInformation:string[];suggestedQuestions:string[];potentialDuplicates:SimilarEntry[]}
 export interface AskResult{answer:string;grounded:boolean;confidence:number;sources:SimilarEntry[];suggestedFollowUps:string[]}
+export interface ChatTurn{role:"user"|"assistant";content:string}
 const base=(import.meta.env.VITE_API_URL??"").replace(/\/$/,"");
 async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch(`${base}${path}`,{...init,headers:{"Content-Type":"application/json",...init?.headers}});if(!response.ok){const body=await response.json().catch(()=>null);throw new Error(body?.title??body?.detail??`Request failed (${response.status})`)}if(response.status===204)return undefined as T;return response.json() as Promise<T>}
 export interface AnalyzeInput { rawInput:string; entryType:EntryType; project?:string; module?:string }
@@ -12,5 +13,5 @@ export const knowledgeApi={
  create:(entry:KnowledgeEntry)=>request<KnowledgeEntry>("/api/knowledge",{method:"POST",body:JSON.stringify(entry)}),
  update:(entry:KnowledgeEntry)=>request<KnowledgeEntry>(`/api/knowledge/${entry.id}`,{method:"PUT",body:JSON.stringify(entry)}),
  archive:(id:string)=>request<void>(`/api/knowledge/${id}/archive`,{method:"POST"}),
- ask:(question:string,project?:string,module?:string)=>request<AskResult>("/api/assistant/ask",{method:"POST",body:JSON.stringify({question,project,module})})
+ ask:(question:string,history:ChatTurn[]=[],project?:string,module?:string)=>request<AskResult>("/api/assistant/ask",{method:"POST",body:JSON.stringify({question,project,module,history})})
 };

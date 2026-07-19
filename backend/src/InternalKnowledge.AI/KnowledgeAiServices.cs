@@ -24,6 +24,22 @@ public sealed class KnowledgeAnalysisService(ILLMService llm,ISemanticSearchServ
 
 public sealed class KnowledgeAnswerService(ILLMService llm,ISemanticSearchService search,IOptions<AiOptions> options) : IKnowledgeAnswerService
 {
-    public async Task<AskResult> AskAsync(AskRequest request,CancellationToken ct){var sources=await search.SearchAsync(request.Question,options.Value.MaxRetrievedItems,request.Project,request.Module,ct);var useful=sources.Where(x=>x.Similarity>=options.Value.MinimumSimilarityThreshold).ToArray();if(useful.Length==0)return new("I don’t have enough reliable internal knowledge to answer that yet.",false,0,[],["Would you like to log what your team already knows about this?"]);if(!options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))return new($"Based on **{useful[0].Title}**:\n\n{useful[0].Summary}",true,useful[0].Similarity,useful,["What prevention steps are documented?","Are there related entries?"]);var promptSources=useful.Select(x=>new{x.Title,x.Summary,x.Similarity});var raw=await llm.CompleteAsync("knowledge-answer",new{request.Question,sources=promptSources},ct);using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;var answer=RemoveInternalIds(root.GetProperty("answer").GetString()??"");return new(answer,root.GetProperty("grounded").GetBoolean(),root.TryGetProperty("confidence",out var c)?c.GetDouble():useful[0].Similarity,useful,root.TryGetProperty("suggestedFollowUps",out var f)?f.EnumerateArray().Select(x=>x.GetString()??"").ToArray():[]);}
+    public async Task<AskResult> AskAsync(AskRequest request,CancellationToken ct)
+    {
+        var priorUserQuestions=(request.History??[]).Where(x=>x.Role.Equals("user",StringComparison.OrdinalIgnoreCase)).TakeLast(2).Select(x=>x.Content);
+        var searchQuery=string.Join("\n",priorUserQuestions.Append(request.Question));
+        var sources=await search.SearchAsync(searchQuery,options.Value.MaxRetrievedItems,request.Project,request.Module,ct);
+        var useful=sources.Where(x=>x.Similarity>=options.Value.MinimumSimilarityThreshold).ToArray();
+        if(useful.Length==0)return new("I don’t have enough reliable internal knowledge to answer that yet.",false,0,[],["Would you like to log what your team already knows about this?"]);
+        if(!options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))return new($"Based on **{useful[0].Title}**:\n\n{useful[0].Summary}",true,useful[0].Similarity,useful,["What prevention steps are documented?","Are there related entries?"]);
+        var promptSources=useful.Select(x=>new{x.Title,x.Summary,x.Similarity});
+        var allHistory=request.History??[];
+        var recentHistory=allHistory.TakeLast(4);
+        var eligibleOlderHistory=allHistory.Take(Math.Max(0,allHistory.Count-4)).TakeLast(2).Where(x=>x.Content.Length<=2000);
+        var history=eligibleOlderHistory.Concat(recentHistory).Select(x=>new{x.Role,x.Content});
+        var raw=await llm.CompleteAsync("knowledge-answer",new{request.Question,conversationHistory=history,sources=promptSources},ct);
+        using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;var answer=RemoveInternalIds(root.GetProperty("answer").GetString()??"");
+        return new(answer,root.GetProperty("grounded").GetBoolean(),root.TryGetProperty("confidence",out var c)?c.GetDouble():useful[0].Similarity,useful,root.TryGetProperty("suggestedFollowUps",out var f)?f.EnumerateArray().Select(x=>x.GetString()??"").ToArray():[]);
+    }
     internal static string RemoveInternalIds(string answer)=>Regex.Replace(answer,@"\s*,?\s*ID:\s*[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}","",RegexOptions.IgnoreCase);
 }

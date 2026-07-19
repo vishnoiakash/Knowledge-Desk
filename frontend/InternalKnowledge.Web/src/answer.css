@@ -5,3 +5,8 @@
 .answer-list-item{display:grid;grid-template-columns:24px 1fr;gap:5px;align-items:start;margin:7px 0;color:#53635b}
 .answer-list-item>span{font-weight:800;color:var(--green);line-height:1.65}
 .answer-list-item>p{margin:0}
+.message-list{display:flex;flex-direction:column;gap:12px}
+.user-message{align-self:flex-end;max-width:75%;background:var(--green);color:#fff;border-radius:14px 14px 4px 14px;padding:11px 15px;line-height:1.5}
+.message-list .answer{align-self:stretch;margin:0}
+.composer button:disabled{opacity:.45;cursor:not-allowed}
+@media(min-width:681px){.is-collapsed .sidebar-foot button{display:block;font-size:24px;padding:0}.is-collapsed .sidebar-foot{gap:4px;padding-left:0;padding-right:0}}

@@ -5,7 +5,8 @@ namespace InternalKnowledge.Application;
 public record AnalyzeKnowledgeRequest(string RawInput, KnowledgeEntryType EntryType, string? Project, string? Module);
 public record AnalysisResult(KnowledgeEntry Entry, IReadOnlyList<string> MissingInformation, IReadOnlyList<string> SuggestedQuestions, IReadOnlyList<SimilarEntry> PotentialDuplicates);
 public record SimilarEntry(Guid KnowledgeEntryId, string Title, string Summary, double Similarity);
-public record AskRequest(string Question, string? Project, string? Module);
+public record ChatTurn(string Role, string Content);
+public record AskRequest(string Question, string? Project, string? Module, IReadOnlyList<ChatTurn>? History=null);
 public record AskResult(string Answer, bool Grounded, double Confidence, IReadOnlyList<SimilarEntry> Sources, IReadOnlyList<string> SuggestedFollowUps);
 
 public interface IKnowledgeRepository
