@@ -9,6 +9,7 @@ async function request<T>(path:string,init?:RequestInit):Promise<T>{const respon
 export interface AnalyzeInput { rawInput:string; entryType:EntryType; project?:string; module?:string }
 export const knowledgeApi={
  list:(query="")=>request<KnowledgeEntry[]>(`/api/knowledge?query=${encodeURIComponent(query)}&page=1&pageSize=100`),
+ get:(id:string)=>request<KnowledgeEntry>(`/api/knowledge/${id}`),
  analyze:(input:AnalyzeInput)=>request<AnalysisResult>("/api/knowledge/analyze",{method:"POST",body:JSON.stringify(input)}),
  create:(entry:KnowledgeEntry)=>request<KnowledgeEntry>("/api/knowledge",{method:"POST",body:JSON.stringify(entry)}),
  update:(entry:KnowledgeEntry)=>request<KnowledgeEntry>(`/api/knowledge/${entry.id}`,{method:"PUT",body:JSON.stringify(entry)}),
