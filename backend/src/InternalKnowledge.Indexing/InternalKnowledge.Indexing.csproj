@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\InternalKnowledge.Application\InternalKnowledge.Application.csproj" />
+    <ProjectReference Include="..\InternalKnowledge.Persistence\InternalKnowledge.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <PropertyGroup>

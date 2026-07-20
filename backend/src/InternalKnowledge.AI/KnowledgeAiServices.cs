@@ -13,7 +13,16 @@ public sealed class KnowledgeAnalysisService(ILLMService llm,ISemanticSearchServ
         List<KnowledgeEntry> entries;List<string> missing=[];List<string> questions=[];
         if(options.Value.Provider.Equals("OpenAI",StringComparison.OrdinalIgnoreCase))
         {
-            var raw=await llm.CompleteAsync("knowledge-extraction",request,ct);using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;
+            // Pass entryType explicitly so the prompt can apply the right extraction strategy
+            var extractionInput = new
+            {
+                entryType    = request.EntryType.ToString(),
+                rawInput     = request.RawInput,
+                project      = request.Project,
+                module       = request.Module
+            };
+            var raw=await llm.CompleteAsync("knowledge-extraction", extractionInput, ct);
+            using var doc=JsonDocument.Parse(raw);var root=doc.RootElement;
             entries=root.TryGetProperty("entries",out var list)&&list.ValueKind==JsonValueKind.Array?list.EnumerateArray().Select(x=>Map(x,request)).ToList():[Map(root,request)];missing=ReadStrings(root,"missingInformation");questions=ReadStrings(root,"suggestedQuestions");
         }
         else entries=LocalAnalyzeMany(request,missing,questions);

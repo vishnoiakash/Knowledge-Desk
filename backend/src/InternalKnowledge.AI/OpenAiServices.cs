@@ -13,7 +13,7 @@ public sealed class OpenAiService(HttpClient http,IOptions<AiOptions> options,IL
     public async Task<string> CompleteAsync(string promptName,object input,CancellationToken ct)
     {
         EnsureConfigured(); var started=DateTime.UtcNow;
-        var instructions=promptName switch { "knowledge-extraction"=>Prompts.Extraction, "knowledge-answer"=>Prompts.Answer, _=>throw new ArgumentOutOfRangeException(nameof(promptName)) };
+        var instructions=promptName switch { "knowledge-extraction"=>Prompts.Extraction, "knowledge-answer"=>Prompts.Answer, "completeness-check"=>Prompts.CompletenessCheck, _=>throw new ArgumentOutOfRangeException(nameof(promptName)) };
         using var request=new HttpRequestMessage(HttpMethod.Post,"responses"); request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",_options.ApiKey);
         request.Content=JsonContent.Create(new { model=promptName=="knowledge-extraction"?_options.ExtractionModel:_options.ChatModel, instructions, input=$"Return the result as a JSON object for this input:\n{JsonSerializer.Serialize(input)}", text=new { format=new { type="json_object" } } });
         using var response=await http.SendAsync(request,ct); var body=await response.Content.ReadAsStringAsync(ct); if(!response.IsSuccessStatusCode) throw new InvalidOperationException($"OpenAI request failed ({(int)response.StatusCode}).");
@@ -39,19 +39,33 @@ static class LocalEmbedding
 static class Prompts
 {
     public const string Extraction="""
-Convert an internal engineering note into one or more structured knowledge entries. Split independent problems into separate entries; keep one entry when the note describes one problem.
+You are extracting structured knowledge from an internal engineering document. The input includes an "entryType" field — use it to determine the correct extraction strategy.
+
+The input may be in any language — Hindi, Hinglish, or English. Always produce all output fields in English regardless of the input language. Translate naturally; do not transliterate.
+
+## Extraction strategy by entry type
+
+**Issue / Troubleshooting**: Extract the symptom (problem), underlying cause (rootCause), the fix applied (solution), and how to prevent recurrence (prevention). These are the primary fields — fill them from the text directly.
+
+**HowTo / Workflow**: The note is a procedure or guide. Put the overall purpose in summary. Put the step-by-step instructions in solution. Use problem only if there is a specific trigger condition. Leave rootCause and prevention null unless explicitly stated.
+
+**Knowledge / Decision / KnownLimitation**: The note is reference material, a design decision, or a documented constraint. Put the core explanation in summary and detailedContent. Use problem only if there is a known failure mode. Leave rootCause and solution null unless the note describes a fix.
+
+**API documentation or reference material** (when the input looks like docs regardless of selected type): Extract one entry per logical API endpoint or concept section. Put the endpoint/feature name in title, its purpose in summary, request/response details and examples in detailedContent, any known gotchas or error conditions in problem, and authentication/prerequisites in solution. Leave rootCause and prevention null.
+
+## Output format
 
 Return every key in exactly this camelCase shape:
 {"entries": [{
   "title": "short descriptive title",
-  "summary": "concise overview",
-  "problem": "observed error or user impact, or null",
-  "rootCause": "cause stated or directly supported by the note, or null",
-  "solution": "corrective action stated or directly supported by the note, or null",
-  "prevention": "preventive action stated or directly supported by the note, or null",
-  "detailedContent": "useful supporting details, or null",
+  "summary": "concise overview — what this is or does",
+  "problem": "observed error, failure condition, or trigger — null if not applicable",
+  "rootCause": "underlying cause — null if not applicable",
+  "solution": "fix, steps, or how to use — null if not applicable",
+  "prevention": "how to avoid recurrence — null if not applicable",
+  "detailedContent": "supporting details, examples, parameters, caveats — null if none",
   "category": "short category, or null",
-  "affectedService": "service name, or null",
+  "affectedService": "service or API name, or null",
   "project": "project from input, or null",
   "module": "module from input, or null",
   "confidenceScore": 0.0,
@@ -61,10 +75,14 @@ Return every key in exactly this camelCase shape:
   "suggestedQuestions": []
 }], "missingInformation": [], "suggestedQuestions": []}
 
-For an Issue or Troubleshooting entry, actively separate the symptom into problem, the stated reason into rootCause, the corrective action into solution, and a future safeguard into prevention.
-Do not omit keys. Do not copy the entire note into every field. Never invent unsupported project-specific facts.
-A directly implied corrective action is allowed when it is the clear inverse of the stated cause—for example, a missing or invalid API key implies supplying a valid API key.
-Use null only when the note does not support the field. Confidence must reflect the supplied evidence. Prompt version: extraction-v2.
+## Rules
+- Split independent problems or API endpoints into separate entries; keep one entry when the input covers a single topic.
+- Do not omit keys. Do not copy the entire document into every field.
+- Never invent unsupported project-specific facts.
+- Use null only when the note genuinely does not support the field.
+- Confidence must reflect the supplied evidence.
+- All output must be in English.
+Prompt version: extraction-v4.
 """;
     public const string Answer="""
 Answer only from the supplied internal knowledge sources and never fabricate project-specific details.
@@ -72,5 +90,20 @@ Match the answer length to the question. For a simple definition or purpose ques
 Do not include database IDs, GUIDs, raw object fields, or parenthetical source identifiers. Source cards are rendered separately, so mention only a human-readable source title when essential.
 Clearly label uncertainty and set grounded to false when evidence is insufficient.
 Return JSON with answer, grounded, confidence, and suggestedFollowUps. Prompt version: answer-v2.
+""";
+    public const string CompletenessCheck="""
+Evaluate whether a raw engineering capture note has enough information to produce a high-quality knowledge entry.
+The note may be in any language — Hindi, Hinglish, or English. Understand it in whatever language it is written.
+
+The input includes an "entryType" field. Apply the correct completeness criteria:
+- Issue / Troubleshooting: requires problem, rootCause, solution. Ask for any that are missing.
+- HowTo / Workflow: requires a clear purpose and steps (solution). Ask only if the procedure is unclear.
+- Knowledge / Decision / KnownLimitation: requires a clear summary. rootCause and solution are not required.
+- If the input looks like API documentation or reference material: it is already complete — return empty arrays.
+
+For each genuinely missing field, provide a concise follow-up question in the same language as the input note.
+Return JSON: {"missingFields": [], "followUpQuestions": []}
+Only list fields that are genuinely absent or insufficiently described. If the note is complete return empty arrays.
+Prompt version: completeness-v3.
 """;
 }
