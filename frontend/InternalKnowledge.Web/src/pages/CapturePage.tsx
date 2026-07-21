@@ -305,7 +305,7 @@ export default function CapturePage() {
           <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
             {/* Chosen intent + back link */}
             <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Stack direction="row" alignItems="center" spacing={1.5}>
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{
                   width: 36, height: 36, borderRadius: 2, flexShrink: 0,
                   bgcolor: tile.bg, color: tile.color,
@@ -313,13 +313,18 @@ export default function CapturePage() {
                 }}>
                   {tile.icon}
                 </Box>
-                <Box>
+                <Box sx={{ minWidth: 0 }}>
                   <Typography variant="subtitle2" fontWeight={700}>{tile.label}</Typography>
                   <Typography variant="caption" color="text.secondary">{tile.description}</Typography>
                 </Box>
               </Stack>
-              <Button size="small" variant="text" onClick={() => { setStep(-1); setTile(null); }}
-                sx={{ color: "text.secondary", fontSize: 12 }}>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => { setStep(-1); setTile(null); }}
+                sx={{ color: "text.disabled", fontSize: 11, flexShrink: 0, ml: 1,
+                  "&:hover": { color: "text.secondary" } }}
+              >
                 ← Change
               </Button>
             </Stack>
