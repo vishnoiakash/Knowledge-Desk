@@ -506,8 +506,7 @@ function AnswerSources({ sources }: { sources: AskResult["sources"] }) {
         const sorted = [...group].sort((a, b) => b.similarity - a.similarity);
         const best   = sorted[0];
         return (
-          <Card key={best.knowledgeEntryId} variant="outlined"
-            sx={{ mt: 1, borderRadius: 2, p: 1.5, bgcolor: "#f9fbfa" }}>
+          <Card key={best.knowledgeEntryId} sx={{ mt: 1, bgcolor: "#f9fbfa" }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary">

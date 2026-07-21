@@ -62,8 +62,7 @@ function UserManagement() {
             Only users in this list can sign in via LDAP. Deactivating a user blocks their next login immediately.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}
-          sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)} color="primary">
           Add user
         </Button>
       </Box>
@@ -222,8 +221,7 @@ function AddUserDialog({ open, onClose, onCreated }: {
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" disabled={!username.trim() || addMut.isPending}
-          onClick={() => addMut.mutate()}
-          sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}>
+          onClick={() => addMut.mutate()} color="primary">
           {addMut.isPending ? <CircularProgress size={16} color="inherit" /> : "Add user"}
         </Button>
       </DialogActions>
@@ -270,8 +268,7 @@ function EditUserDialog({ user, onClose, onSaved }: {
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" disabled={saveMut.isPending}
-          onClick={() => saveMut.mutate()}
-          sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}>
+          onClick={() => saveMut.mutate()} color="primary">
           {saveMut.isPending ? <CircularProgress size={16} color="inherit" /> : "Save"}
         </Button>
       </DialogActions>

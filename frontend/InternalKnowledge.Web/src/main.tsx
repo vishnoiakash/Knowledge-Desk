@@ -98,6 +98,14 @@ const theme = createTheme({
         },
       },
     },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          padding: "20px",
+          "&:last-child": { paddingBottom: "20px" },
+        },
+      },
+    },
     MuiChip: {
       styleOverrides: {
         root: { fontWeight: 600, borderRadius: 6 },

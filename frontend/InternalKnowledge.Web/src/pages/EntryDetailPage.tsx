@@ -96,8 +96,8 @@ export default function EntryDetailPage() {
       </Button>
 
       {/* Header card */}
-      <Card variant="outlined" sx={{ borderRadius: 3, mb: 2 }}>
-        <CardContent sx={{ p: 3 }}>
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Stack direction="row" spacing={1} mb={1} flexWrap="wrap">
@@ -177,8 +177,8 @@ export default function EntryDetailPage() {
 
       {/* Edit form */}
       <Collapse in={editing}>
-        <Card variant="outlined" sx={{ borderRadius: 3, mb: 2 }}>
-          <CardContent sx={{ p: 3 }}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>Edit entry</Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
               {/* Title */}
@@ -208,8 +208,7 @@ export default function EntryDetailPage() {
               ))}
             </Box>
             <Stack direction="row" spacing={1} mt={2}>
-              <Button variant="contained" onClick={() => actionMut.mutate("save")} disabled={actionMut.isPending}
-                sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}>
+              <Button variant="contained" onClick={() => actionMut.mutate("save")} disabled={actionMut.isPending} color="primary">
                 {actionMut.isPending ? <CircularProgress size={16} color="inherit" /> : "Save changes"}
               </Button>
               <Button variant="text" onClick={() => { setEditing(false); setDraft(null); }}>Cancel</Button>
@@ -226,9 +225,8 @@ export default function EntryDetailPage() {
           {getFieldSchema(e.entryType)
             .filter(f => !!(e as Record<string, unknown>)[f.key])
             .map(f => (
-              <Card key={f.key} variant="outlined" sx={{ borderRadius: 2,
-                gridColumn: f.wide ? "1 / -1" : "auto" }}>
-                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Card key={f.key} sx={{ gridColumn: f.wide ? "1 / -1" : "auto" }}>
+                <CardContent>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>
                     {f.label}
                   </Typography>
@@ -247,8 +245,8 @@ export default function EntryDetailPage() {
               return !schema.some(f => f.key === k) && !!(e as Record<string, unknown>)[k];
             })
             .map(k => (
-              <Card key={k} variant="outlined" sx={{ borderRadius: 2, gridColumn: "1 / -1" }}>
-                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Card key={k} sx={{ borderRadius: 2, gridColumn: "1 / -1" }}>
+                <CardContent>
                   <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="capitalize">
                     {FIELD_LABELS[k] ?? k}
                   </Typography>
@@ -264,8 +262,8 @@ export default function EntryDetailPage() {
           {META_FIELDS
             .filter(k => !!(e as Record<string, unknown>)[k])
             .map(k => (
-              <Card key={k} variant="outlined" sx={{ borderRadius: 2 }}>
-                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+              <Card key={k}>
+                <CardContent>
                   <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="capitalize">
                     {FIELD_LABELS[k] ?? k}
                   </Typography>
@@ -279,8 +277,8 @@ export default function EntryDetailPage() {
 
       {/* Revision history */}
       {revisions && revisions.length > 0 && (
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent sx={{ p: 3 }}>
+        <Card>
+          <CardContent>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>Revision history</Typography>
             <Stack spacing={1}>
               {revisions.map(r => (

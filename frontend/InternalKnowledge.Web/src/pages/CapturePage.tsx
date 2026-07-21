@@ -44,7 +44,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "Issue",
     label:       "Bug fix / Incident",
     description: "Something broke — you diagnosed and fixed it",
-    icon:        <BugReportOutlinedIcon sx={{ fontSize: 28 }} />,
+    icon:        <BugReportOutlinedIcon sx={{ fontSize: 22 }} />,
     color:       "#c0392b",
     bg:          "#fff1f0",
     placeholder: "Describe the bug, what caused it, and how you fixed it. The AI will ask for any missing details.",
@@ -53,7 +53,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "Troubleshooting",
     label:       "Troubleshooting guide",
     description: "A repeatable process to diagnose a class of problems",
-    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 28 }} />,
+    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 22 }} />,
     color:       "#a05c1a",
     bg:          "#fff8ec",
     placeholder: "Describe the symptom, steps to diagnose, and how to resolve each variant.",
@@ -62,7 +62,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "HowTo",
     label:       "How-to / Workflow",
     description: "Step-by-step guide for a task your team repeats",
-    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 28 }} />,
+    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 22 }} />,
     color:       "#1a7a46",
     bg:          "#edf7f0",
     placeholder: "Describe the goal and walk through the steps needed to achieve it.",
@@ -71,7 +71,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "Knowledge",
     label:       "API / Reference",
     description: "API documentation, service reference, or technical spec",
-    icon:        <MenuBookOutlinedIcon sx={{ fontSize: 28 }} />,
+    icon:        <MenuBookOutlinedIcon sx={{ fontSize: 22 }} />,
     color:       "#1a4a8a",
     bg:          "#eef5ff",
     placeholder: "Paste or describe the API — endpoints, parameters, auth, examples, known gotchas.",
@@ -80,7 +80,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "Decision",
     label:       "Architecture decision",
     description: "A design or technology choice that should be remembered",
-    icon:        <AccountTreeOutlinedIcon sx={{ fontSize: 28 }} />,
+    icon:        <AccountTreeOutlinedIcon sx={{ fontSize: 22 }} />,
     color:       "#5b2da0",
     bg:          "#f3eeff",
     placeholder: "Describe the context, the options considered, the decision taken, and the trade-offs.",
@@ -89,7 +89,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "KnownLimitation",
     label:       "Known limitation",
     description: "A system constraint or limitation the team needs to know about",
-    icon:        <WarningAmberIcon sx={{ fontSize: 28 }} />,
+    icon:        <WarningAmberIcon sx={{ fontSize: 22 }} />,
     color:       "#8a4a1a",
     bg:          "#fef5ec",
     placeholder: "Describe the limitation, its impact, any known workaround, and the expected fix timeline.",
@@ -98,7 +98,7 @@ const INTENT_TILES: IntentTile[] = [
     entryType:   "Knowledge",  // document upload uses Knowledge as default; AI overrides
     label:       "Upload a document",
     description: "PDF, DOCX, Markdown, or TXT — AI extracts knowledge entries",
-    icon:        <UploadFileOutlinedIcon sx={{ fontSize: 28 }} />,
+    icon:        <UploadFileOutlinedIcon sx={{ fontSize: 22 }} />,
     color:       "#1e4d42",
     bg:          "#e8f3ef",
     placeholder: "",           // not used — goes to document tab
@@ -220,7 +220,7 @@ export default function CapturePage() {
   const answeredAny = selectedIdxs.some(i => fieldAnswers[i]?.trim());
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 960, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 960, mx: "auto", pb: { xs: 4, md: 6 } }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="overline" color="text.secondary">Capture</Typography>
@@ -233,48 +233,52 @@ export default function CapturePage() {
       {/* ── Step -1: Intent tiles ─────────────────────────────────────────── */}
       {step === -1 && (
         <Box>
-          <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+          <Typography variant="subtitle1" fontWeight={600} mb={0.75}>
             What are you logging today?
           </Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>
+          <Typography variant="body2" color="text.secondary" mb={2.5}>
             Pick the type that best matches — the AI will use the right extraction strategy.
           </Typography>
           <Box sx={{
             display: "grid",
             gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" },
-            gap: 2,
+            gap: 1.5,
+            pb: 0.5,
           }}>
             {INTENT_TILES.map(t => (
               <Card
                 key={`${t.entryType}-${t.label}`}
                 onClick={() => pickTile(t)}
                 sx={{
-                  cursor: "pointer", borderRadius: 3,
+                  cursor: "pointer",
                   transition: "all .15s",
                   "&:hover": {
                     borderColor: t.color,
                     boxShadow: `0 4px 16px ${alpha(t.color, 0.15)}`,
-                    transform: "translateY(-2px)",
+                    transform: "translateY(-1px)",
                   },
                 }}
               >
-                <CardContent sx={{ p: 2.5 }}>
-                  <Box sx={{
-                    width: 48, height: 48, borderRadius: 2.5, mb: 1.5,
-                    bgcolor: t.bg, color: t.color,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    {t.icon}
+                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                  {/* Icon + title on same row */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+                    <Box sx={{
+                      width: 38, height: 38, borderRadius: 2, flexShrink: 0,
+                      bgcolor: t.bg, color: t.color,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {t.icon}
+                    </Box>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+                      {t.label}
+                    </Typography>
                   </Box>
-                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    {t.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                  <Typography variant="caption" color="text.secondary" display="block" mb={1}>
                     {t.description}
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: t.color }}>
                     <Typography variant="caption" fontWeight={700}>Get started</Typography>
-                    <ArrowForwardIcon sx={{ fontSize: 13 }} />
+                    <ArrowForwardIcon sx={{ fontSize: 12 }} />
                   </Box>
                 </CardContent>
               </Card>
@@ -297,8 +301,8 @@ export default function CapturePage() {
 
       {/* ── Step 0: Input ────────────────────────────────────────────────── */}
       {step === 0 && tile && (
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, p: 3 }}>
+        <Card>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
             {/* Chosen intent + back link */}
             <Stack direction="row" alignItems="center" justifyContent="space-between">
               <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -403,8 +407,8 @@ export default function CapturePage() {
 
       {/* ── Step 1: Selective follow-up ──────────────────────────────────── */}
       {step === 1 && captureSession && (
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2.5 }}>
+        <Card>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
             {/* Header */}
             <Box>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>

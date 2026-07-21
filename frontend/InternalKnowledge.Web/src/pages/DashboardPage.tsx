@@ -66,10 +66,10 @@ export default function DashboardPage() {
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ p: { xs: 2, md: 3.5 } }}>
 
       {/* Header */}
-      <Box sx={{ mb: 2.5 }}>
+      <Box sx={{ mb: 3 }}>
         <Typography variant="overline">Dashboard</Typography>
         <Typography variant="h4" sx={{ mt: 0.25, mb: 0.5 }}>
           {greeting}, {user?.displayName?.split(" ")[0] ?? user?.username} 👋
@@ -80,7 +80,7 @@ export default function DashboardPage() {
       </Box>
 
       {/* Stats — 4 equal cards, fixed dimensions */}
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 2, mb: 2.5 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 2, mb: 3 }}>
         {([
           { label: "Knowledge entries", value: entries.isLoading   ? null : totalEntries,  icon: <CollectionsBookmarkIcon sx={{ fontSize: 18 }} />, color: "#1e4d42", bg: "#e8f3ef", path: "/library",   sub: "Total indexed" },
           { label: "Open questions",    value: questions.isLoading ? null : openQuestions, icon: <HelpOutlineOutlinedIcon sx={{ fontSize: 18 }} />, color: "#1a4a8a", bg: "#eef5ff", path: "/questions", sub: myQuestions > 0 ? `${myQuestions} for you` : "None for you" },
@@ -93,21 +93,28 @@ export default function DashboardPage() {
               "&:hover": path ? { borderColor: color, boxShadow: `0 2px 10px ${alpha(color, 0.1)}` } : {} }}
             onClick={() => path && navigate(path)}
           >
-            <Box sx={{ p: 2, height: 108, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box sx={{ bgcolor: bg, borderRadius: 1.5, width: 32, height: 32,
-                  display: "flex", alignItems: "center", justifyContent: "center", color }}>
-                  {icon}
-                </Box>
-                {path && <ArrowForwardIcon sx={{ fontSize: 12, color: "text.disabled" }} />}
+            <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1.5 }}>
+              {/* Icon */}
+              <Box sx={{
+                bgcolor: bg, borderRadius: 1.5, width: 40, height: 40, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center", color,
+              }}>
+                {icon}
               </Box>
-              <Box>
-                <Typography sx={{ fontSize: 24, fontFamily: "Georgia,serif", fontWeight: 600, color, lineHeight: 1, mb: 0.3 }}>
-                  {value === null ? <CircularProgress size={18} thickness={3} sx={{ color }} /> : value}
+              {/* Text */}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontSize: 24, fontFamily: "Georgia,serif", fontWeight: 600, color, lineHeight: 1, mb: 0.25 }}>
+                  {value === null ? <CircularProgress size={16} thickness={3} sx={{ color }} /> : value}
                 </Typography>
-                <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary", lineHeight: 1.3 }}>{label}</Typography>
-                <Typography sx={{ fontSize: 10.5, color: "text.disabled", lineHeight: 1.3 }}>{sub}</Typography>
+                <Typography sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary", lineHeight: 1.3 }}>
+                  {label}
+                </Typography>
+                <Typography sx={{ fontSize: 11, color: "text.disabled", lineHeight: 1.3 }}>
+                  {sub}
+                </Typography>
               </Box>
+              {/* Arrow */}
+              {path && <ArrowForwardIcon sx={{ fontSize: 12, color: "text.disabled", flexShrink: 0 }} />}
             </Box>
           </Card>
         ))}

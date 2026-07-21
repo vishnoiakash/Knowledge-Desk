@@ -42,8 +42,8 @@ export default function LibraryPage() {
       </Box>
 
       {/* Filters */}
-      <Card variant="outlined" sx={{ mb: 3, borderRadius: 2 }}>
-        <Box sx={{ p: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr 1fr 1fr" }, gap: 1.5, alignItems: "center" }}>
+      <Card sx={{ mb: 3 }}>
+        <Box sx={{ p: 2.5, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr 1fr 1fr" }, gap: 1.5, alignItems: "center" }}>
           <TextField size="small" placeholder="Search…" value={q.query ?? ""}
             onChange={e => set("query", e.target.value)}
             InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary", fontSize: 18 }} /> }} />
@@ -83,8 +83,8 @@ export default function LibraryPage() {
 
       <Stack spacing={1.5}>
         {data?.items.map(e => (
-          <Card key={e.id} variant="outlined" sx={{ borderRadius: 2, cursor: "pointer",
-            "&:hover": { borderColor: "#345f54", boxShadow: "0 2px 8px rgba(52,95,84,.12)" },
+          <Card key={e.id} sx={{ cursor: "pointer",
+            "&:hover": { borderColor: "#1e4d42", boxShadow: "0 2px 8px rgba(30,77,66,.1)" },
             transition: "all .15s" }}
             onClick={() => navigate(`/library/${e.id}`)}>
             <CardRow

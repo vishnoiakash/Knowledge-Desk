@@ -51,7 +51,7 @@ export default function ReviewPanel({ analysis, onDone }: { analysis: AnalysisRe
 
       {/* Duplicate warning */}
       {dups.length > 0 && (
-        <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#f3dfc3", bgcolor: "#fff7ec" }}>
+        <Card sx={{ borderColor: "#f3dfc3", bgcolor: "#fff7ec" }}>
           <CardContent>
             <Typography variant="subtitle2" gutterBottom>Potential duplicates found</Typography>
             <Stack spacing={1}>
@@ -109,8 +109,8 @@ export default function ReviewPanel({ analysis, onDone }: { analysis: AnalysisRe
         const schema = getFieldSchema(e.entryType);
 
         return (
-          <Card key={e.id} variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent sx={{ p: 3 }}>
+          <Card key={e.id}>
+            <CardContent>
               {/* Header row: title + editable entry type */}
               <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }}
                 justifyContent="space-between" spacing={1.5} mb={2}>
@@ -198,7 +198,7 @@ export default function ReviewPanel({ analysis, onDone }: { analysis: AnalysisRe
                 disabled={saved.includes(updateId ?? e.id) || save.isPending ||
                   (dups.length > 0 && !allow && !updateId)}
                 onClick={() => save.mutate(e)}
-                sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}
+                color="primary"
               >
                 {saved.includes(updateId ?? e.id)
                   ? "Saved ✓"

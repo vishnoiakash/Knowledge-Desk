@@ -147,7 +147,7 @@ export default function DocumentUploadZone({ entryType, project, module, onResul
             variant="contained"
             disabled={busy}
             onClick={() => upload.mutate(file)}
-            sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}
+            color="primary"
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <UploadFileIcon />}
           >
             {busy ? "Analysing…" : "Extract & analyse"}
