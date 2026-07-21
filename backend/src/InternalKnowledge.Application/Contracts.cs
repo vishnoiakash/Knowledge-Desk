@@ -3,8 +3,7 @@ using InternalKnowledge.Domain;
 namespace InternalKnowledge.Application;
 
 public record AnalyzeKnowledgeRequest(string RawInput, KnowledgeEntryType EntryType, string? Project, string? Module);
-// CaptureSession tracks interactive multi-turn capture before final commit
-public record CaptureSession(Guid SessionId, KnowledgeEntryType EntryType, string? Project, string? Module, string CurrentInput, IReadOnlyList<string> MissingFields, IReadOnlyList<string> FollowUpQuestions, bool ReadyToCommit);
+// CaptureSession is now defined in Contracts.cs
 public record AnalysisResult(KnowledgeEntry Entry, IReadOnlyList<KnowledgeEntry> SuggestedEntries, IReadOnlyList<string> MissingInformation, IReadOnlyList<string> SuggestedQuestions, IReadOnlyList<KnowledgeSearchResult> PotentialDuplicates);
 public record KnowledgeSearchResult(Guid KnowledgeEntryId, Guid ChunkId, string ChunkType, string Title, string Summary, string? Problem, string? RootCause, string? Solution, string? Prevention, string? DetailedContent, string? Project, string? Module, string Snippet, double Similarity);
 public record ChatTurn(string Role, string Content);
@@ -42,5 +41,38 @@ public interface IEmbeddingService { Task<ReadOnlyMemory<float>> GenerateAsync(s
 public interface ILLMService { Task<string> CompleteAsync(string promptName, object input, CancellationToken cancellationToken); }
 public interface ISemanticSearchService { Task<IReadOnlyList<KnowledgeSearchResult>> SearchAsync(string query, int limit, string? project, string? module, CancellationToken cancellationToken); }
 
+// Enrich feature — AI merges new information into an existing entry
+public record EnrichRequest(string AdditionalNote, string? EnrichedBy = null);
+
+/// <summary>
+/// One field change proposed by the enrich merge. 
+/// OldValue = current field content. NewValue = AI-proposed updated content.
+/// </summary>
+public record FieldChange(string Field, string? OldValue, string? NewValue, bool IsNew);
+
+public record EnrichResult(
+    KnowledgeEntry ProposedEntry,
+    IReadOnlyList<FieldChange> Changes,
+    string Summary);
+
+public interface IKnowledgeEnrichService
+{
+    Task<EnrichResult> EnrichAsync(KnowledgeEntry existing, string additionalNote, CancellationToken ct);
+}
+
 // Interactive capture: checks completeness before committing to the database
-public interface ICaptureCompletenessService { Task<CaptureSession> EvaluateAsync(Guid sessionId, KnowledgeEntryType entryType, string currentInput, string? project, string? module, CancellationToken cancellationToken); }
+// FieldAnswer carries a per-field answer from the selective follow-up UI.
+public record FieldAnswer(string Field, string Answer);
+// CaptureSession tracks interactive multi-turn capture before final commit
+public record CaptureSession(Guid SessionId, KnowledgeEntryType EntryType, string? Project, string? Module, string CurrentInput, IReadOnlyList<string> MissingFields, IReadOnlyList<string> FollowUpQuestions, bool ReadyToCommit, int Round = 0);
+public interface ICaptureCompletenessService
+{
+    Task<CaptureSession> EvaluateAsync(
+        Guid sessionId,
+        KnowledgeEntryType entryType,
+        string currentInput,
+        string? project,
+        string? module,
+        IReadOnlyList<FieldAnswer>? fieldAnswers,
+        CancellationToken cancellationToken);
+}

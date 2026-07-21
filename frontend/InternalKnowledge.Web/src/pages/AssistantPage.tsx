@@ -4,13 +4,18 @@ import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
   Divider, IconButton, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
-import SendIcon from "@mui/icons-material/Send";
-import ThumbUpAltOutlinedIcon from "@mui/icons-material/ThumbUpAltOutlined";
+import SendIcon          from "@mui/icons-material/Send";
+import ThumbUpAltOutlinedIcon  from "@mui/icons-material/ThumbUpAltOutlined";
 import ThumbDownAltOutlinedIcon from "@mui/icons-material/ThumbDownAltOutlined";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import ThumbUpIcon       from "@mui/icons-material/ThumbUp";
+import ThumbDownIcon     from "@mui/icons-material/ThumbDown";
+import ContentCopyIcon   from "@mui/icons-material/ContentCopy";
+import CheckIcon         from "@mui/icons-material/Check";
+import ReactMarkdown     from "react-markdown";
+import remarkGfm         from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneLight }      from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useMutation }   from "@tanstack/react-query";
 import { assistantApi, chatHistoryApi, knowledgeApi, type AskResult, type ChatTurn } from "../services/api";
 import "../answer.css";
 
@@ -22,29 +27,38 @@ interface Message {
 }
 
 export default function AssistantPage() {
-  const location            = useLocation();
-  const incomingSession     = (location.state as { sessionId?: string } | null)?.sessionId;
+  const location        = useLocation();
+  const listRef         = useRef<HTMLDivElement>(null);
 
-  const [messages,   setMessages]   = useState<Message[]>([]);
-  const [question,   setQuestion]   = useState("");
-  const [sessionId,  setSessionId]  = useState<string | undefined>(incomingSession);
-  const [copied,     setCopied]     = useState<number | null>(null);
-  const listRef                     = useRef<HTMLDivElement>(null);
+  const [messages,  setMessages]  = useState<Message[]>([]);
+  const [question,  setQuestion]  = useState("");
+  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [copied,    setCopied]    = useState<number | null>(null);
+  const [loading,   setLoading]   = useState(false);
 
-  // Load existing session from history when navigated with a sessionId
-  const sessionQuery = useQuery({
-    queryKey: ["chatSession", incomingSession],
-    queryFn:  () => chatHistoryApi.getDetail(incomingSession!),
-    enabled:  !!incomingSession && messages.length === 0,
-  });
-
+  // Read the sessionId from location.state every time navigation state changes.
+  // This fires both on first mount AND when the user clicks a different history item
+  // in the sidebar (which calls navigate("/assistant", { state: { sessionId } })).
   useEffect(() => {
-    if (sessionQuery.data) {
-      setMessages(sessionQuery.data.turns.map(t => ({
-        role: t.role as "user" | "assistant", content: t.content,
-      })));
-    }
-  }, [sessionQuery.data]);
+    const incoming = (location.state as { sessionId?: string } | null)?.sessionId;
+    if (!incoming) return;
+    if (incoming === sessionId) return; // already showing this session
+
+    setLoading(true);
+    setMessages([]);
+    setSessionId(incoming);
+
+    chatHistoryApi.getDetail(incoming)
+      .then(data => {
+        setMessages(data.turns.map(t => ({
+          role: t.role as "user" | "assistant",
+          content: t.content,
+        })));
+      })
+      .catch(() => {/* session may have been pruned — start fresh */})
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -94,27 +108,26 @@ export default function AssistantPage() {
       </Box>
 
       {/* Chat window */}
-      <Card variant="outlined" sx={{ borderRadius: 3, display: "flex", flexDirection: "column", minHeight: 560 }}>
+      <Card variant="outlined" sx={{ borderRadius: 3, display: "flex", flexDirection: "column", minHeight: 560, overflow: "hidden" }}>
         {/* Message list */}
-        <Box ref={listRef} sx={{ flex: 1, overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-          {messages.length === 0 && !sessionQuery.isLoading && (
+        <Box ref={listRef} sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", p: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+          {messages.length === 0 && !loading && (
             <Box sx={{ textAlign: "center", my: "auto", color: "text.secondary" }}>
               <Typography variant="body2">Ask anything about your team's indexed knowledge.</Typography>
             </Box>
           )}
 
-          {sessionQuery.isLoading && (
+          {loading && (
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress /></Box>
           )}
-
           {messages.map((m, i) => m.role === "user" ? (
-            <Box key={i} sx={{ alignSelf: "flex-end", maxWidth: "75%", bgcolor: "#345f54", color: "#fff",
-              borderRadius: "14px 14px 4px 14px", px: 2, py: 1.25, lineHeight: 1.5 }}>
+            <Box key={i} sx={{ alignSelf: "flex-end", maxWidth: "75%", minWidth: 0, bgcolor: "#345f54", color: "#fff",
+              borderRadius: "14px 14px 4px 14px", px: 2, py: 1.25, lineHeight: 1.5, wordBreak: "break-word" }}>
               {m.content}
             </Box>
           ) : (
             <Box key={i} sx={{ bgcolor: "#fafbf9", border: "1px solid", borderColor: "divider",
-              borderRadius: 2.5, p: 2.5 }}>
+              borderRadius: 2.5, p: 2.5, minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
               {/* Grounded badge */}
               <Chip
                 label={m.result?.grounded ? "Grounded" : "Insufficient evidence"}
@@ -124,21 +137,22 @@ export default function AssistantPage() {
               />
 
               {/* Answer body */}
-              <div className="answer-body">
+              <Box sx={{ "& > *:first-of-type": { mt: 0 }, "& > *:last-of-type": { mb: 0 } }}>
                 <AnswerBody text={m.content} />
-              </div>
+              </Box>
 
               {/* Suggested follow-ups */}
               {m.result?.suggestedFollowUps && m.result.suggestedFollowUps.length > 0 && (
-                <Box sx={{ mt: 1.5 }}>
+                <Box sx={{ mt: 1.5, maxWidth: "100%" }}>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>Follow-up suggestions</Typography>
-                  <Stack direction="row" spacing={1} mt={0.5} flexWrap="wrap" useFlexGap>
+                  <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                     {m.result.suggestedFollowUps.map((s, si) => (
                       <Chip key={si} label={s} size="small" variant="outlined" clickable
                         onClick={() => { setQuestion(s); }}
-                        sx={{ fontSize: 11, cursor: "pointer" }} />
+                        sx={{ fontSize: 11, cursor: "pointer", maxWidth: "100%",
+                          "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }} />
                     ))}
-                  </Stack>
+                  </Box>
                 </Box>
               )}
 
@@ -208,32 +222,273 @@ export default function AssistantPage() {
   );
 }
 
-// ── Answer renderer ───────────────────────────────────────────────────────────
+// ── Answer renderer (react-markdown + syntax highlighting) ───────────────────
 
-function InlineAnswer({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return <>{parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2, -2)}</strong> :
-    p.startsWith("`")  && p.endsWith("`")  ? <code key={i}>{p.slice(1, -1)}</code> : p
-  )}</>;
+/**
+ * Pre-process the answer text before passing to react-markdown.
+ * Detects bare JSON-looking lines/blocks that the AI forgot to fence and
+ * wraps them in ```json code fences automatically.
+ *
+ * Patterns handled:
+ *   1. Single-line inline JSON objects/arrays:  { "key": "val" }  or  [ 1, 2 ]
+ *   2. Multi-line JSON blocks that start with { or [ and end with } or ]
+ *      but are NOT already inside a fenced code block.
+ */
+function preprocessMarkdown(text: string): string {
+  // Split into lines for processing
+  const lines = text.split("\n");
+  const result: string[] = [];
+  let inFence = false;
+  let jsonBuffer: string[] = [];
+  let i = 0;
+
+  function flushJsonBuffer() {
+    if (jsonBuffer.length === 0) return;
+    const joined = jsonBuffer.join("\n").trim();
+    // Try to format as pretty JSON
+    try {
+      const parsed = JSON.parse(joined);
+      result.push("```json");
+      result.push(JSON.stringify(parsed, null, 2));
+      result.push("```");
+    } catch {
+      // Not valid JSON — just wrap as-is
+      result.push("```json");
+      result.push(joined);
+      result.push("```");
+    }
+    jsonBuffer = [];
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Track existing fences — don't touch content inside them
+    if (trimmed.startsWith("```")) {
+      flushJsonBuffer();
+      inFence = !inFence;
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    if (inFence) {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    // Detect start of a bare JSON block or single-line JSON
+    const looksLikeJson =
+      (trimmed.startsWith("{") || trimmed.startsWith("[")) &&
+      trimmed.length > 2;
+
+    if (looksLikeJson) {
+      // Check if it closes on the same line (single-line JSON)
+      if (
+        (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+        (trimmed.startsWith("[") && trimmed.endsWith("]"))
+      ) {
+        // Single-line — wrap immediately
+        jsonBuffer.push(trimmed);
+        flushJsonBuffer();
+        i++;
+        continue;
+      }
+
+      // Multi-line — accumulate until the matching close
+      let depth = 0;
+      const startChar = trimmed[0];
+      const endChar   = startChar === "{" ? "}" : "]";
+
+      while (i < lines.length) {
+        const l = lines[i].trim();
+        for (const ch of l) {
+          if (ch === startChar) depth++;
+          if (ch === endChar)   depth--;
+        }
+        jsonBuffer.push(lines[i]);
+        i++;
+        if (depth <= 0) break;
+      }
+      flushJsonBuffer();
+      continue;
+    }
+
+    result.push(line);
+    i++;
+  }
+
+  flushJsonBuffer();
+  return result.join("\n");
+}
+
+/** Per-code-block copy button — appears on hover */
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <Box sx={{ position: "relative", my: 1.5, borderRadius: 2, overflow: "hidden",
+      border: "1px solid #e0e8e4", "&:hover .copy-btn": { opacity: 1 } }}>
+      {/* Language label + copy button bar */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+        bgcolor: "#f0f4f2", px: 1.5, py: 0.5, borderBottom: "1px solid #e0e8e4" }}>
+        <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#5a7a6a", fontFamily: "monospace" }}>
+          {language || "code"}
+        </Typography>
+        <IconButton
+          className="copy-btn"
+          size="small"
+          onClick={copy}
+          sx={{ opacity: 0, transition: "opacity .15s", p: 0.5 }}
+        >
+          {copied
+            ? <CheckIcon sx={{ fontSize: 14, color: "#1e4d42" }} />
+            : <ContentCopyIcon sx={{ fontSize: 14 }} />}
+        </IconButton>
+      </Box>
+      <SyntaxHighlighter
+        language={language || "text"}
+        style={oneLight}
+        customStyle={{ margin: 0, borderRadius: 0, fontSize: 13, background: "#fafcfa" }}
+        showLineNumbers={code.split("\n").length > 4}
+        wrapLongLines
+      >
+        {code}
+      </SyntaxHighlighter>
+    </Box>
+  );
 }
 
 function AnswerBody({ text }: { text: string }) {
-  const lines = text.replace(/\s+(?=#{1,3}\s)/g, "\n\n").replace(/\s+(?=-\s)/g, "\n").split(/\r?\n/);
+  const processed = preprocessMarkdown(text);
   return (
-    <div className="answer-body">
-      {lines.map((line, i) => {
-        const v = line.trim();
-        if (!v) return <div className="answer-gap" key={i} />;
-        const h = v.match(/^#{1,3}\s+(.+)$/);
-        if (h) return <h3 key={i}><InlineAnswer text={h[1]} /></h3>;
-        const b = v.match(/^[-*]\s+(.+)$/);
-        if (b) return <div className="answer-list-item" key={i}><span>•</span><p><InlineAnswer text={b[1]} /></p></div>;
-        const n = v.match(/^(\d+)\.\s+(.+)$/);
-        if (n) return <div className="answer-list-item" key={i}><span>{n[1]}.</span><p><InlineAnswer text={n[2]} /></p></div>;
-        return <p key={i}><InlineAnswer text={v} /></p>;
-      })}
-    </div>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        // ── Code blocks ───────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        code({ node, className, children, ...props }: any) {
+          const isBlock = !props.inline;
+          const lang    = (className ?? "").replace("language-", "");
+          const code    = String(children).replace(/\n$/, "");
+          if (isBlock) return <CodeBlock language={lang} code={code} />;
+          // Inline code
+          return (
+            <code style={{
+              background: "#edf2ef", borderRadius: 4, padding: "2px 5px",
+              color: "#1e4d42", fontSize: "0.88em", fontFamily: "monospace",
+            }}>
+              {children}
+            </code>
+          );
+        },
+
+        // ── Links — open in new tab, styled ───────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        a({ href, children }: any) {
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#1e4d42", fontWeight: 600, textDecoration: "underline",
+                textDecorationColor: "#a8c5be", textUnderlineOffset: 2 }}
+            >
+              {children}
+            </a>
+          );
+        },
+
+        // ── Headings ──────────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        h1: ({ children }: any) => (
+          <Typography variant="h5" fontFamily="Georgia" fontWeight={600} sx={{ mt: 2.5, mb: 1, color: "#161f1d" }}>
+            {children}
+          </Typography>
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        h2: ({ children }: any) => (
+          <Typography variant="h6" fontFamily="Georgia" fontWeight={600} sx={{ mt: 2, mb: 0.75, color: "#161f1d" }}>
+            {children}
+          </Typography>
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        h3: ({ children }: any) => (
+          <Typography sx={{ fontSize: 15, fontWeight: 700, mt: 1.75, mb: 0.5, color: "#1e4d42" }}>
+            {children}
+          </Typography>
+        ),
+
+        // ── Paragraphs ────────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        p: ({ children }: any) => (
+          <Typography variant="body2" sx={{ my: 0.75, lineHeight: 1.7, color: "#2d3f3a" }}>
+            {children}
+          </Typography>
+        ),
+
+        // ── Lists ─────────────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ul: ({ children }: any) => (
+          <Box component="ul" sx={{ pl: 2.5, my: 0.75, "& li": { mb: 0.4, color: "#2d3f3a" } }}>
+            {children}
+          </Box>
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ol: ({ children }: any) => (
+          <Box component="ol" sx={{ pl: 2.5, my: 0.75, "& li": { mb: 0.4, color: "#2d3f3a" } }}>
+            {children}
+          </Box>
+        ),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        li: ({ children }: any) => (
+          <Typography component="li" variant="body2" sx={{ lineHeight: 1.65 }}>
+            {children}
+          </Typography>
+        ),
+
+        // ── Blockquote ────────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        blockquote: ({ children }: any) => (
+          <Box sx={{ borderLeft: "3px solid #a8c5be", pl: 1.5, ml: 0, my: 1,
+            bgcolor: "#f5f8f6", borderRadius: "0 6px 6px 0", py: 0.5 }}>
+            {children}
+          </Box>
+        ),
+
+        // ── Tables (via remark-gfm) ────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        table: ({ children }: any) => (
+          <Box sx={{ overflowX: "auto", my: 1.5 }}>
+            <Box component="table"
+              sx={{ borderCollapse: "collapse", width: "100%", fontSize: 13,
+                "& th,& td": { border: "1px solid #e0e8e4", px: 1.5, py: 0.75, textAlign: "left" },
+                "& th": { bgcolor: "#eef3f0", fontWeight: 700, color: "#1e4d42" },
+                "& tr:nth-of-type(even)": { bgcolor: "#f9fbf9" },
+              }}>
+              {children}
+            </Box>
+          </Box>
+        ),
+
+        // ── Horizontal rule ───────────────────────────────────────────────
+        hr: () => <Divider sx={{ my: 1.5 }} />,
+
+        // ── Strong / em ───────────────────────────────────────────────────
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        strong: ({ children }: any) => <strong style={{ color: "#161f1d" }}>{children}</strong>,
+      }}
+    >
+      {processed}
+    </ReactMarkdown>
   );
 }
 
@@ -258,8 +513,8 @@ function AnswerSources({ sources }: { sources: AskResult["sources"] }) {
                 <Typography variant="caption" color="text.secondary">
                   {best.chunkType} · {Math.round(best.similarity * 100)}% match
                 </Typography>
-                <Typography variant="subtitle2" fontWeight={600}>{best.title}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{best.snippet}</Typography>
+                <Typography variant="subtitle2" fontWeight={600} sx={{ wordBreak: "break-word" }}>{best.title}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, wordBreak: "break-word" }}>{best.snippet}</Typography>
               </Box>
             </Stack>
             {sorted.length > 1 && (

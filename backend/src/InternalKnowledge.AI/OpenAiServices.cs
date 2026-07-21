@@ -13,7 +13,13 @@ public sealed class OpenAiService(HttpClient http,IOptions<AiOptions> options,IL
     public async Task<string> CompleteAsync(string promptName,object input,CancellationToken ct)
     {
         EnsureConfigured(); var started=DateTime.UtcNow;
-        var instructions=promptName switch { "knowledge-extraction"=>Prompts.Extraction, "knowledge-answer"=>Prompts.Answer, "completeness-check"=>Prompts.CompletenessCheck, _=>throw new ArgumentOutOfRangeException(nameof(promptName)) };
+        var instructions=promptName switch {
+            "knowledge-extraction" => Prompts.Extraction,
+            "knowledge-answer"     => Prompts.Answer,
+            "completeness-check"   => Prompts.CompletenessCheck,
+            "knowledge-enrich"     => Prompts.Enrich,
+            _ => throw new ArgumentOutOfRangeException(nameof(promptName))
+        };
         using var request=new HttpRequestMessage(HttpMethod.Post,"responses"); request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",_options.ApiKey);
         request.Content=JsonContent.Create(new { model=promptName=="knowledge-extraction"?_options.ExtractionModel:_options.ChatModel, instructions, input=$"Return the result as a JSON object for this input:\n{JsonSerializer.Serialize(input)}", text=new { format=new { type="json_object" } } });
         using var response=await http.SendAsync(request,ct); var body=await response.Content.ReadAsStringAsync(ct); if(!response.IsSuccessStatusCode) throw new InvalidOperationException($"OpenAI request failed ({(int)response.StatusCode}).");
@@ -89,7 +95,15 @@ Answer only from the supplied internal knowledge sources and never fabricate pro
 Match the answer length to the question. For a simple definition or purpose question, answer directly in one to three short paragraphs. Use concise Markdown headings, bullets, or numbered steps only when they materially improve a multi-part or procedural answer. Put every heading and list item on its own line and include blank lines between sections.
 Do not include database IDs, GUIDs, raw object fields, or parenthetical source identifiers. Source cards are rendered separately, so mention only a human-readable source title when essential.
 Clearly label uncertainty and set grounded to false when evidence is insufficient.
-Return JSON with answer, grounded, confidence, and suggestedFollowUps. Prompt version: answer-v2.
+
+IMPORTANT FORMATTING RULES:
+- Always wrap JSON objects and arrays in fenced code blocks with the json language tag: ```json\n...\n```
+- Always wrap code snippets (C#, SQL, shell, etc.) in fenced code blocks with the appropriate language tag
+- Never write JSON inline as plain text — always use a code block
+- URLs must be written as Markdown links: [display text](url) or bare https:// links
+- Use pipe tables for tabular data
+
+Return JSON with answer, grounded, confidence, and suggestedFollowUps. Prompt version: answer-v3.
 """;
     public const string CompletenessCheck="""
 Evaluate whether a raw engineering capture note has enough information to produce a high-quality knowledge entry.
@@ -105,5 +119,39 @@ For each genuinely missing field, provide a concise follow-up question in the sa
 Return JSON: {"missingFields": [], "followUpQuestions": []}
 Only list fields that are genuinely absent or insufficiently described. If the note is complete return empty arrays.
 Prompt version: completeness-v3.
+""";
+    public const string Enrich="""
+You are enriching an existing internal engineering knowledge entry with new information provided by a team member.
+
+Your job is to produce an improved version of the entry that:
+1. Preserves everything that is already correct and well-written
+2. Incorporates the new information into the most appropriate fields
+3. If the new information contradicts existing content, include both with clear context (e.g. "Originally: X. Later found: Y.")
+4. Never removes accurate existing content — only add or clarify
+5. Never invent facts not present in either the existing entry or the new note
+
+The input may be in any language. All output must be in English.
+
+Return JSON in this exact shape:
+{
+  "summary": "one sentence describing what changed",
+  "entry": {
+    "title": "...",
+    "summary": "...",
+    "problem": "...",
+    "rootCause": "...",
+    "solution": "...",
+    "prevention": "...",
+    "detailedContent": "...",
+    "category": "...",
+    "affectedService": "...",
+    "tags": [],
+    "technologies": []
+  }
+}
+
+Return null for any field that should remain unchanged from the existing entry.
+Only populate fields that genuinely benefit from the new information.
+Prompt version: enrich-v1.
 """;
 }

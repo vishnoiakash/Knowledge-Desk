@@ -76,12 +76,30 @@ export interface ChatSessionDetail {
   turns: { role: string; content: string }[];
 }
 
+// Enrich feature
+export interface FieldChange {
+  field: string;
+  oldValue?: string;
+  newValue?: string;
+  isNew: boolean;
+}
+export interface EnrichResult {
+  summary: string;
+  changes: FieldChange[];
+  proposedEntry: KnowledgeEntry;
+  enrichedBy?: string;
+}
+
 // Capture completeness
 export interface CaptureSession {
   sessionId: string; entryType: EntryType; project?: string; module?: string;
   currentInput: string; missingFields: string[];
   followUpQuestions: string[]; readyToCommit: boolean;
+  round: number;
 }
+
+// Structured per-field answer from the selective follow-up UI
+export interface FieldAnswer { field: string; answer: string; }
 
 // Document upload
 export interface DocumentUploadResult {
@@ -186,6 +204,8 @@ export const knowledgeApi = {
   feedback:  (id: string, helpful: boolean, comment?: string) =>
     request<void>(`/api/knowledge/${id}/feedback`, { method: "POST", body: json({ helpful, comment }) }),
   feedbackStats: (id: string) => request<FeedbackStats>(`/api/knowledge/${id}/feedback`),
+  enrich: (id: string, additionalNote: string) =>
+    request<EnrichResult>(`/api/knowledge/${id}/enrich`, { method: "POST", body: json({ additionalNote }) }),
 };
 
 // ── Assistant API ─────────────────────────────────────────────────────────────
@@ -225,9 +245,23 @@ export const questionsApi = {
 // ── Capture completeness API ──────────────────────────────────────────────────
 
 export const captureApi = {
-  evaluate: (entryType: EntryType, currentInput: string, sessionId?: string, project?: string, module?: string) =>
+  /**
+   * Evaluate completeness of the current note.
+   * @param fieldAnswers  Structured answers from the selective follow-up UI.
+   *                      Pass only the questions the user chose to answer.
+   */
+  evaluate: (
+    entryType: EntryType,
+    currentInput: string,
+    sessionId?: string,
+    project?: string,
+    module?: string,
+    fieldAnswers?: FieldAnswer[],
+  ) =>
     request<CaptureSession>("/api/capture/evaluate", {
-      method: "POST", body: json({ entryType, currentInput, sessionId, project, module }),
+      method: "POST",
+      body: json({ entryType, currentInput, sessionId, project, module,
+        fieldAnswers: fieldAnswers?.length ? fieldAnswers : undefined }),
     }),
 
   uploadDocument: (

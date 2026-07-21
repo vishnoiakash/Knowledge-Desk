@@ -85,5 +85,10 @@ public sealed class CaptureEvaluateValidator : AbstractValidator<CaptureEvaluate
         RuleFor(x => x.CurrentInput).NotEmpty().Length(10, 20_000);
         RuleFor(x => x.Project).MaximumLength(120);
         RuleFor(x => x.Module).MaximumLength(120);
+        RuleForEach(x => x.FieldAnswers).ChildRules(fa =>
+        {
+            fa.RuleFor(x => x.Field).NotEmpty().MaximumLength(80);
+            fa.RuleFor(x => x.Answer).NotEmpty().MaximumLength(10_000);
+        });
     }
 }

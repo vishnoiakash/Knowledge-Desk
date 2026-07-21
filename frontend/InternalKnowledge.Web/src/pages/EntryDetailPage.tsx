@@ -5,17 +5,19 @@ import {
   Collapse, Divider, IconButton, Stack, TextField, Tooltip,
   Typography, Dialog, DialogTitle, DialogContent, DialogActions,
 } from "@mui/material";
-import ThumbUpAltOutlinedIcon from "@mui/icons-material/ThumbUpAltOutlined";
+import ThumbUpAltOutlinedIcon  from "@mui/icons-material/ThumbUpAltOutlined";
 import ThumbDownAltOutlinedIcon from "@mui/icons-material/ThumbDownAltOutlined";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
-import EditIcon from "@mui/icons-material/Edit";
-import ArchiveIcon from "@mui/icons-material/Archive";
-import UnarchiveIcon from "@mui/icons-material/Unarchive";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ThumbUpIcon             from "@mui/icons-material/ThumbUp";
+import ThumbDownIcon           from "@mui/icons-material/ThumbDown";
+import EditIcon                from "@mui/icons-material/Edit";
+import AddCircleOutlineIcon    from "@mui/icons-material/AddCircleOutlineOutlined";
+import ArchiveIcon             from "@mui/icons-material/Archive";
+import UnarchiveIcon           from "@mui/icons-material/Unarchive";
+import ArrowBackIcon           from "@mui/icons-material/ArrowBack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { knowledgeApi, type KnowledgeEntry } from "../services/api";
 import { getFieldSchema, FIELD_LABELS } from "../utils/entryTypeFields";
+import EnrichPanel from "../components/EnrichPanel";
 
 const META_FIELDS = ["project","module","affectedService"] as const;
 
@@ -40,11 +42,12 @@ export default function EntryDetailPage() {
     enabled:  !!id,
   });
 
-  const [editing,  setEditing]  = useState(false);
-  const [draft,    setDraft]    = useState<KnowledgeEntry | null>(null);
-  const [fbVote,   setFbVote]   = useState<boolean | null>(null);
-  const [fbDialog, setFbDialog] = useState(false);
-  const [fbComment,setFbComment]= useState("");
+  const [editing,   setEditing]   = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [draft,     setDraft]     = useState<KnowledgeEntry | null>(null);
+  const [fbVote,    setFbVote]    = useState<boolean | null>(null);
+  const [fbDialog,  setFbDialog]  = useState(false);
+  const [fbComment, setFbComment] = useState("");
 
   const actionMut = useMutation({
     mutationFn: (kind: "save" | "archive" | "restore") =>
@@ -60,9 +63,23 @@ export default function EntryDetailPage() {
     onSuccess: () => { setFbDialog(false); setFbComment(""); refetchFb(); },
   });
 
+  // Called when user accepts enriched changes — saves directly without manual edit step
+  const enrichSaveMut = useMutation({
+    mutationFn: (proposed: KnowledgeEntry) => knowledgeApi.update(proposed),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["entry", id] });
+      qc.invalidateQueries({ queryKey: ["revisions", id] });
+      setEnriching(false);
+    },
+  });
+
+  function handleEnrichAccepted(proposed: KnowledgeEntry) {
+    enrichSaveMut.mutate(proposed);
+  }
+
   function openFeedback(helpful: boolean) {
     setFbVote(helpful);
-    if (!helpful) { setFbDialog(true); return; } // ask for comment on downvote
+    if (!helpful) { setFbDialog(true); return; }
     feedbackMut.mutate({ helpful });
   }
 
@@ -118,8 +135,14 @@ export default function EntryDetailPage() {
                 </Typography>
               )}
               <Divider orientation="vertical" flexItem />
+              <Button size="small" startIcon={<AddCircleOutlineIcon />}
+                onClick={() => { setEnriching(v => !v); setEditing(false); }}
+                color={enriching ? "primary" : "inherit"}
+                variant={enriching ? "outlined" : "text"}>
+                Add more info
+              </Button>
               <Button size="small" startIcon={<EditIcon />}
-                onClick={() => { setDraft({ ...entry }); setEditing(true); }}>
+                onClick={() => { setDraft({ ...entry }); setEditing(true); setEnriching(false); }}>
                 Edit
               </Button>
               {e.status === "Archived"
@@ -130,6 +153,27 @@ export default function EntryDetailPage() {
           </Box>
         </CardContent>
       </Card>
+
+      {/* Enrich panel */}
+      <Collapse in={enriching}>
+        <Box sx={{ mb: 2 }}>
+          {enrichSaveMut.isSuccess && (
+            <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => enrichSaveMut.reset()}>
+              Entry updated with the new information. Re-indexing in the background.
+            </Alert>
+          )}
+          {enrichSaveMut.error && (
+            <Alert severity="error" sx={{ mb: 1.5 }}>{(enrichSaveMut.error as Error).message}</Alert>
+          )}
+          {!enrichSaveMut.isSuccess && (
+            <EnrichPanel
+              entryId={id!}
+              onAccepted={handleEnrichAccepted}
+              onClose={() => setEnriching(false)}
+            />
+          )}
+        </Box>
+      </Collapse>
 
       {/* Edit form */}
       <Collapse in={editing}>

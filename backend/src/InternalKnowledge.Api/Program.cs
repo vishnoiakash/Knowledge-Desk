@@ -295,8 +295,43 @@ app.MapGet("/api/knowledge/{id:guid}/similar", async (
         : Results.NotFound()
 ).RequireAuthorization();
 
-app.MapPost("/api/knowledge/{id:guid}/reindex", async (
-    Guid id, IKnowledgeRepository repo, IKnowledgeIndexingQueue queue, CancellationToken ct) =>
+// ── Enrich endpoint ───────────────────────────────────────────────────────────
+// POST /api/knowledge/{id}/enrich
+// Accepts a raw additional note, runs the AI merge prompt, returns a proposed
+// updated entry + field-level diff. The client reviews and calls PUT to confirm.
+
+app.MapPost("/api/knowledge/{id:guid}/enrich", async (
+    Guid id,
+    EnrichRequest request,
+    ClaimsPrincipal user,
+    IKnowledgeRepository repo,
+    IKnowledgeEnrichService enrich,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.AdditionalNote))
+        return Results.BadRequest(new { message = "AdditionalNote is required." });
+    if (request.AdditionalNote.Length > 20_000)
+        return Results.BadRequest(new { message = "AdditionalNote must be under 20 000 characters." });
+
+    var existing = await repo.GetAsync(id, ct);
+    if (existing is null) return Results.NotFound();
+
+    var username = user.FindFirstValue(ClaimTypes.NameIdentifier);
+    var result   = await enrich.EnrichAsync(existing, request.AdditionalNote, ct);
+
+    // Stamp who enriched it so the revision history is clear
+    result.ProposedEntry.UpdatedAt = DateTimeOffset.UtcNow;
+
+    return Results.Ok(new
+    {
+        result.Summary,
+        result.Changes,
+        ProposedEntry = result.ProposedEntry,
+        EnrichedBy    = username
+    });
+}).RequireAuthorization();
+
+app.MapPost("/api/knowledge/{id:guid}/reindex", async (    Guid id, IKnowledgeRepository repo, IKnowledgeIndexingQueue queue, CancellationToken ct) =>
 {
     if (await repo.GetAsync(id, ct) is null) return Results.NotFound();
     await queue.EnqueueAsync(id, ct);
@@ -674,8 +709,13 @@ app.MapPost("/api/capture/evaluate", async (
 {
     var sessionId = request.SessionId ?? Guid.NewGuid();
     var session = await completeness.EvaluateAsync(
-        sessionId, request.EntryType, request.CurrentInput,
-        request.Project, request.Module, ct);
+        sessionId,
+        request.EntryType,
+        request.CurrentInput,
+        request.Project,
+        request.Module,
+        request.FieldAnswers,
+        ct);
     return Results.Ok(session);
 }).RequireAuthorization();
 
@@ -758,7 +798,8 @@ record LoginRequest(string Username, string Password);
 record FeedbackRequest(bool Helpful, string? Comment);
 public record SemanticSearchRequest(string Query, int Limit = 8, string? Project = null, string? Module = null);
 public record CaptureEvaluateRequest(KnowledgeEntryType EntryType, string CurrentInput,
-    Guid? SessionId = null, string? Project = null, string? Module = null);
+    Guid? SessionId = null, string? Project = null, string? Module = null,
+    IReadOnlyList<FieldAnswer>? FieldAnswers = null);
 record ChatTurnRecord(string Role, string Content);
 
 // Query parameters for GET /api/knowledge

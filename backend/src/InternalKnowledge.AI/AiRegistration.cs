@@ -26,6 +26,7 @@ public static class AiRegistration
         services.AddScoped<IKnowledgeAnalysisService, KnowledgeAnalysisService>();
         services.AddScoped<IKnowledgeAnswerService, KnowledgeAnswerService>();
         services.AddScoped<ICaptureCompletenessService, CaptureCompletenessService>();
+        services.AddScoped<IKnowledgeEnrichService, KnowledgeEnrichService>();
         return services;
     }
 }

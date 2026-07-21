@@ -1,296 +1,527 @@
 import { useState } from "react";
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
-  Divider, FormControl, InputLabel, MenuItem, Select, Stack,
-  Step, StepLabel, Stepper, Tab, Tabs, TextField, Typography,
+  Collapse, Divider, Stack, Step, StepLabel, Stepper,
+  Tab, Tabs, TextField, Typography, alpha,
 } from "@mui/material";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
-import MicIcon from "@mui/icons-material/Mic";
+import AutoFixHighIcon          from "@mui/icons-material/AutoFixHigh";
+import CheckCircleOutlineIcon   from "@mui/icons-material/CheckCircleOutlineOutlined";
+import TextFieldsIcon           from "@mui/icons-material/TextFields";
+import UploadFileIcon           from "@mui/icons-material/UploadFile";
+import MicIcon                  from "@mui/icons-material/Mic";
+import ArrowForwardIcon         from "@mui/icons-material/ArrowForward";
+import BugReportOutlinedIcon    from "@mui/icons-material/BugReportOutlined";
+import MenuBookOutlinedIcon     from "@mui/icons-material/MenuBookOutlined";
+import PlaylistAddCheckIcon     from "@mui/icons-material/PlaylistAddCheck";
+import AccountTreeOutlinedIcon  from "@mui/icons-material/AccountTreeOutlined";
+import WarningAmberIcon         from "@mui/icons-material/WarningAmber";
+import UploadFileOutlinedIcon   from "@mui/icons-material/UploadFileOutlined";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   captureApi, knowledgeApi,
-  type AnalysisResult, type CaptureSession, type EntryType, type KnowledgeEntry,
+  type AnalysisResult, type CaptureSession, type EntryType,
+  type FieldAnswer, type KnowledgeEntry,
 } from "../services/api";
-import ReviewPanel from "../components/ReviewPanel";
+import ReviewPanel        from "../components/ReviewPanel";
 import DocumentUploadZone from "../components/DocumentUploadZone";
-import VoiceInputButton from "../components/VoiceInputButton";
-import { useAuth } from "../contexts/AuthContext";
+import VoiceInputButton   from "../components/VoiceInputButton";
+import { useAuth }        from "../contexts/AuthContext";
 
-const TYPES: EntryType[] = ["Issue","Workflow","Knowledge","Troubleshooting","HowTo","Decision","KnownLimitation"];
-const STEPS = ["Describe", "Complete", "Review & save"];
+// ── Intent tile definitions ───────────────────────────────────────────────────
+
+interface IntentTile {
+  entryType:   EntryType;
+  label:       string;
+  description: string;
+  icon:        React.ReactNode;
+  color:       string;
+  bg:          string;
+  placeholder: string;
+}
+
+const INTENT_TILES: IntentTile[] = [
+  {
+    entryType:   "Issue",
+    label:       "Bug fix / Incident",
+    description: "Something broke — you diagnosed and fixed it",
+    icon:        <BugReportOutlinedIcon sx={{ fontSize: 28 }} />,
+    color:       "#c0392b",
+    bg:          "#fff1f0",
+    placeholder: "Describe the bug, what caused it, and how you fixed it. The AI will ask for any missing details.",
+  },
+  {
+    entryType:   "Troubleshooting",
+    label:       "Troubleshooting guide",
+    description: "A repeatable process to diagnose a class of problems",
+    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 28 }} />,
+    color:       "#a05c1a",
+    bg:          "#fff8ec",
+    placeholder: "Describe the symptom, steps to diagnose, and how to resolve each variant.",
+  },
+  {
+    entryType:   "HowTo",
+    label:       "How-to / Workflow",
+    description: "Step-by-step guide for a task your team repeats",
+    icon:        <PlaylistAddCheckIcon sx={{ fontSize: 28 }} />,
+    color:       "#1a7a46",
+    bg:          "#edf7f0",
+    placeholder: "Describe the goal and walk through the steps needed to achieve it.",
+  },
+  {
+    entryType:   "Knowledge",
+    label:       "API / Reference",
+    description: "API documentation, service reference, or technical spec",
+    icon:        <MenuBookOutlinedIcon sx={{ fontSize: 28 }} />,
+    color:       "#1a4a8a",
+    bg:          "#eef5ff",
+    placeholder: "Paste or describe the API — endpoints, parameters, auth, examples, known gotchas.",
+  },
+  {
+    entryType:   "Decision",
+    label:       "Architecture decision",
+    description: "A design or technology choice that should be remembered",
+    icon:        <AccountTreeOutlinedIcon sx={{ fontSize: 28 }} />,
+    color:       "#5b2da0",
+    bg:          "#f3eeff",
+    placeholder: "Describe the context, the options considered, the decision taken, and the trade-offs.",
+  },
+  {
+    entryType:   "KnownLimitation",
+    label:       "Known limitation",
+    description: "A system constraint or limitation the team needs to know about",
+    icon:        <WarningAmberIcon sx={{ fontSize: 28 }} />,
+    color:       "#8a4a1a",
+    bg:          "#fef5ec",
+    placeholder: "Describe the limitation, its impact, any known workaround, and the expected fix timeline.",
+  },
+  {
+    entryType:   "Knowledge",  // document upload uses Knowledge as default; AI overrides
+    label:       "Upload a document",
+    description: "PDF, DOCX, Markdown, or TXT — AI extracts knowledge entries",
+    icon:        <UploadFileOutlinedIcon sx={{ fontSize: 28 }} />,
+    color:       "#1e4d42",
+    bg:          "#e8f3ef",
+    placeholder: "",           // not used — goes to document tab
+  },
+];
+
+const STEPPER_LABELS = ["Describe", "Complete", "Review & save"];
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function CapturePage() {
   const { user } = useAuth();
   const qc       = useQueryClient();
 
-  // Shared state
-  const [inputMode, setInputMode] = useState<"text" | "document" | "voice">("text");
-  const [type,    setType]    = useState<EntryType>("Issue");
-  const [project, setProject] = useState("");
-  const [module,  setModule]  = useState("");
+  // Step: -1 = intent, 0 = input, 1 = follow-up, 2 = review
+  const [step,        setStep]        = useState<-1 | 0 | 1 | 2>(-1);
+  const [tile,        setTile]        = useState<IntentTile | null>(null);
+  const [inputMode,   setInputMode]   = useState<"text" | "voice" | "document">("text");
+  const [type,        setType]        = useState<EntryType>("Issue");
+  const [project,     setProject]     = useState("");
+  const [module,      setModule]      = useState("");
+  const [raw,         setRaw]         = useState("");
+  const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
 
-  // Text-input flow
-  const [raw,           setRaw]           = useState("");
-  const [captureSession,setCaptureSession]= useState<CaptureSession | null>(null);
-  const [followUpText,  setFollowUpText]  = useState("");
+  // Selective follow-up state: which questions are selected + per-field answer
+  const [selectedIdxs,  setSelectedIdxs]  = useState<number[]>([]);
+  const [fieldAnswers,  setFieldAnswers]  = useState<Record<number, string>>({});
 
-  // Shared review state
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [step,     setStep]     = useState(0);
 
-  // ── stamp capturedBy on all entries from a result ─────────────────────────
-  function stampResult(result: AnalysisResult): AnalysisResult {
-    const stamp = (e: KnowledgeEntry): KnowledgeEntry => ({ ...e, capturedBy: user?.username });
-    return { ...result, entry: stamp(result.entry), suggestedEntries: result.suggestedEntries.map(stamp) };
+  function stamp(result: AnalysisResult): AnalysisResult {
+    const s = (e: KnowledgeEntry): KnowledgeEntry => ({ ...e, capturedBy: user?.username });
+    return { ...result, entry: s(result.entry), suggestedEntries: result.suggestedEntries.map(s) };
   }
 
-  // ── Text flow: Step 0→1 evaluate completeness ─────────────────────────────
+  // ── Step 0→1: evaluate completeness ──────────────────────────────────────
   const evaluate = useMutation({
-    mutationFn: () => captureApi.evaluate(type, raw, captureSession?.sessionId, project || undefined, module || undefined),
+    mutationFn: () => captureApi.evaluate(
+      type, raw, captureSession?.sessionId, project || undefined, module || undefined,
+    ),
     onSuccess: (session) => {
       setCaptureSession(session);
-      if (session.readyToCommit) analyzeNote.mutate(raw);
+      resetFollowUp();
+      if (session.readyToCommit) analyzeNote.mutate(session.currentInput);
       else setStep(1);
     },
   });
 
-  // ── Text flow: Step 1→1 follow-up ─────────────────────────────────────────
-  const addFollowUp = useMutation({
+  // ── Step 1→1/2: submit selected answers, re-evaluate ─────────────────────
+  const submitAnswers = useMutation({
     mutationFn: () => {
-      const merged = `${captureSession!.currentInput}\n\n${followUpText}`;
-      return captureApi.evaluate(type, merged, captureSession!.sessionId, project || undefined, module || undefined);
+      const answers: FieldAnswer[] = selectedIdxs
+        .filter(i => fieldAnswers[i]?.trim())
+        .map(i => ({
+          field:  captureSession!.missingFields[i] ?? `field_${i}`,
+          answer: fieldAnswers[i].trim(),
+        }));
+      return captureApi.evaluate(
+        type,
+        captureSession!.currentInput,
+        captureSession!.sessionId,
+        project || undefined,
+        module  || undefined,
+        answers,
+      );
     },
     onSuccess: (session) => {
       setCaptureSession(session);
-      setFollowUpText("");
+      resetFollowUp();
       if (session.readyToCommit) analyzeNote.mutate(session.currentInput);
     },
   });
 
-  // ── Text flow: Step 1→2 / 0→2 AI analysis ────────────────────────────────
+  // ── Analyse ───────────────────────────────────────────────────────────────
   const analyzeNote = useMutation({
     mutationFn: (input: string) => knowledgeApi.analyze({
       rawInput: input, entryType: type,
       project: project || undefined, module: module || undefined,
     }),
-    onSuccess: (result) => { setAnalysis(stampResult(result)); setStep(2); },
+    onSuccess: (result) => { setAnalysis(stamp(result)); setStep(2); },
   });
 
-  // ── Document flow: upload → result → go straight to review ───────────────
+  // ── Document flow ─────────────────────────────────────────────────────────
   function handleDocumentResult(result: AnalysisResult) {
-    const stamped = stampResult(result);
-    // Auto-detect: use the type the AI assigned to the first entry.
-    // If the user had "Issue" selected but uploaded an API doc, the AI will
-    // return "Knowledge" — sync the selector so it reflects what was actually analysed.
-    const detectedType = stamped.suggestedEntries?.[0]?.entryType ?? stamped.entry.entryType;
-    if (detectedType && detectedType !== type) setType(detectedType);
+    const stamped = stamp(result);
+    const detected = stamped.suggestedEntries?.[0]?.entryType ?? stamped.entry.entryType;
+    if (detected && detected !== type) setType(detected);
     setAnalysis(stamped);
     setStep(2);
   }
 
+  function resetFollowUp() {
+    setSelectedIdxs([]);
+    setFieldAnswers({});
+  }
+
   function reset() {
-    setRaw(""); setProject(""); setModule(""); setType("Issue");
-    setCaptureSession(null); setFollowUpText(""); setAnalysis(null); setStep(0);
+    setStep(-1); setTile(null); setInputMode("text");
+    setType("Issue"); setProject(""); setModule(""); setRaw("");
+    setCaptureSession(null); resetFollowUp(); setAnalysis(null);
     qc.invalidateQueries({ queryKey: ["knowledge"] });
   }
 
-  const textBusy = evaluate.isPending || addFollowUp.isPending || analyzeNote.isPending;
-  const textErr  = evaluate.error ?? addFollowUp.error ?? analyzeNote.error;
+  function pickTile(t: IntentTile) {
+    setTile(t);
+    setType(t.entryType);
+    setInputMode(t.label === "Upload a document" ? "document" : "text");
+    setStep(0);
+  }
+
+  function toggleQuestion(i: number) {
+    setSelectedIdxs(prev =>
+      prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+    );
+  }
+
+  const busy        = evaluate.isPending || submitAnswers.isPending || analyzeNote.isPending;
+  const err         = evaluate.error ?? submitAnswers.error ?? analyzeNote.error;
+  const answeredAny = selectedIdxs.some(i => fieldAnswers[i]?.trim());
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 960, mx: "auto" }}>
-      {/* Page header */}
+      {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="overline" color="text.secondary">Capture</Typography>
         <Typography variant="h4" fontFamily="Georgia" fontWeight={600}>Log knowledge</Typography>
         <Typography variant="body2" color="text.secondary">
-          Paste a note or upload a document — AI structures it into reusable knowledge entries.
+          Capture once. Find and reuse forever.
         </Typography>
       </Box>
 
-      {/* Stepper (only for text flow; document skips straight to step 2) */}
-      {(inputMode === "text" || step === 2) && (
+      {/* ── Step -1: Intent tiles ─────────────────────────────────────────── */}
+      {step === -1 && (
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+            What are you logging today?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mb={3}>
+            Pick the type that best matches — the AI will use the right extraction strategy.
+          </Typography>
+          <Box sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" },
+            gap: 2,
+          }}>
+            {INTENT_TILES.map(t => (
+              <Card
+                key={`${t.entryType}-${t.label}`}
+                onClick={() => pickTile(t)}
+                sx={{
+                  cursor: "pointer", borderRadius: 3,
+                  transition: "all .15s",
+                  "&:hover": {
+                    borderColor: t.color,
+                    boxShadow: `0 4px 16px ${alpha(t.color, 0.15)}`,
+                    transform: "translateY(-2px)",
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box sx={{
+                    width: 48, height: 48, borderRadius: 2.5, mb: 1.5,
+                    bgcolor: t.bg, color: t.color,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {t.icon}
+                  </Box>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                    {t.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                    {t.description}
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: t.color }}>
+                    <Typography variant="caption" fontWeight={700}>Get started</Typography>
+                    <ArrowForwardIcon sx={{ fontSize: 13 }} />
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* ── Steps 0–2 stepper ────────────────────────────────────────────── */}
+      {step >= 0 && (
         <Stepper activeStep={step} sx={{ mb: 3 }}>
-          {STEPS.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
+          {STEPPER_LABELS.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
         </Stepper>
       )}
 
-      {/* ── Step 2: Review ─────────────────────────────────────────────────── */}
+      {/* ── Step 2: Review ───────────────────────────────────────────────── */}
       {step === 2 && analysis && (
         <ReviewPanel analysis={analysis} onDone={reset} />
       )}
 
-      {/* ── Step 0: Input ──────────────────────────────────────────────────── */}
-      {step === 0 && (
+      {/* ── Step 0: Input ────────────────────────────────────────────────── */}
+      {step === 0 && tile && (
         <Card variant="outlined" sx={{ borderRadius: 3 }}>
           <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, p: 3 }}>
+            {/* Chosen intent + back link */}
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: 2, flexShrink: 0,
+                  bgcolor: tile.bg, color: tile.color,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {tile.icon}
+                </Box>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={700}>{tile.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{tile.description}</Typography>
+                </Box>
+              </Stack>
+              <Button size="small" variant="text" onClick={() => { setStep(-1); setTile(null); }}
+                sx={{ color: "text.secondary", fontSize: 12 }}>
+                ← Change
+              </Button>
+            </Stack>
 
-            {/* Type + Project + Module — shared for both input modes */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-start">
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>Entry type</InputLabel>
-                <Select value={type} label="Entry type" onChange={e => setType(e.target.value as EntryType)}>
-                  {TYPES.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-                </Select>
-              </FormControl>
+            <Divider />
+
+            {/* Project + Module */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField size="small" label="Project (optional)" value={project}
                 onChange={e => setProject(e.target.value)} sx={{ flex: 1 }} />
               <TextField size="small" label="Module (optional)" value={module}
                 onChange={e => setModule(e.target.value)} sx={{ flex: 1 }} />
             </Stack>
 
-            <Divider />
+            {/* Input mode tabs (not shown for document tile) */}
+            {tile.label !== "Upload a document" && (
+              <Tabs value={inputMode} onChange={(_, v) => setInputMode(v)}
+                sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36, py: 0 } }}>
+                <Tab value="text"  icon={<TextFieldsIcon fontSize="small" />} iconPosition="start" label="Write" />
+                <Tab value="voice" icon={<MicIcon fontSize="small" />}        iconPosition="start" label="Speak" />
+              </Tabs>
+            )}
 
-            {/* Input mode tabs */}
-            <Tabs
-              value={inputMode}
-              onChange={(_, v) => setInputMode(v)}
-              sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36, py: 0 } }}
-            >
-              <Tab value="text"     icon={<TextFieldsIcon fontSize="small" />} iconPosition="start" label="Write a note" />
-              <Tab value="voice"    icon={<MicIcon fontSize="small" />}        iconPosition="start" label="Speak a note" />
-              <Tab value="document" icon={<UploadFileIcon fontSize="small" />} iconPosition="start" label="Upload document" />
-            </Tabs>
-
-            {/* ── Text input ──────────────────────────────────────────────── */}
+            {/* ── Text ── */}
             {inputMode === "text" && (
               <>
                 <TextField
-                  label="Describe what happened"
-                  multiline minRows={7} value={raw}
-                  onChange={e => setRaw(e.target.value)}
-                  inputProps={{ minLength: 20 }}
-                  placeholder="Paste your note here. AI checks completeness before creating the entry — it will ask follow-up questions if key information is missing."
-                  fullWidth
+                  label={tile.label} multiline minRows={7} fullWidth
+                  value={raw} onChange={e => setRaw(e.target.value)}
+                  placeholder={tile.placeholder}
                 />
-                {textErr && <Alert severity="error">{textErr.message}</Alert>}
+                {err && <Alert severity="error">{(err as Error).message}</Alert>}
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button
-                    variant="contained" disabled={textBusy || raw.length < 20}
+                  <Button variant="contained" disabled={busy || raw.length < 20}
                     onClick={() => evaluate.mutate()}
-                    sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}
-                    startIcon={textBusy ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}
-                  >
-                    {textBusy ? "Analysing…" : "Analyse"}
+                    sx={{ bgcolor: "#1e4d42", "&:hover": { bgcolor: "#173d34" }, fontWeight: 700 }}
+                    startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}>
+                    {busy ? "Analysing…" : "Analyse"}
                   </Button>
                 </Box>
               </>
             )}
 
-            {/* ── Voice input ─────────────────────────────────────────────── */}
+            {/* ── Voice ── */}
             {inputMode === "voice" && (
               <>
-                {/* The voice button sits above the textarea and updates it live */}
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 1.5,
                   bgcolor: "#f5f8f6", borderRadius: 2, border: "1px solid #dce7e1" }}>
-                  <VoiceInputButton
-                    onTranscript={text => setRaw(text)}
-                    existingText={raw}
-                    disabled={textBusy}
-                  />
+                  <VoiceInputButton onTranscript={t => setRaw(t)} existingText={raw} disabled={busy} />
                   <Typography variant="caption" color="text.secondary">
-                    Speak in English, Hindi, or Hinglish — the entry will always be saved in English.
-                    Click the mic to start, click Stop when done.
+                    Speak in English, Hindi, or Hinglish — always saved in English.
                   </Typography>
                 </Box>
-
-                <TextField
-                  label="Transcript"
-                  multiline minRows={7} value={raw}
-                  onChange={e => setRaw(e.target.value)}
-                  inputProps={{ minLength: 20 }}
-                  placeholder="Your speech will appear here live. You can also edit it before analysing."
-                  fullWidth
-                />
-                {textErr && <Alert severity="error">{textErr.message}</Alert>}
+                <TextField label="Transcript" multiline minRows={7} fullWidth
+                  value={raw} onChange={e => setRaw(e.target.value)}
+                  placeholder="Your speech will appear here live." />
+                {err && <Alert severity="error">{(err as Error).message}</Alert>}
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button
-                    variant="contained" disabled={textBusy || raw.length < 20}
+                  <Button variant="contained" disabled={busy || raw.length < 20}
                     onClick={() => evaluate.mutate()}
-                    sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}
-                    startIcon={textBusy ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}
-                  >
-                    {textBusy ? "Analysing…" : "Analyse transcript"}
+                    sx={{ bgcolor: "#1e4d42", "&:hover": { bgcolor: "#173d34" }, fontWeight: 700 }}
+                    startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighIcon />}>
+                    {busy ? "Analysing…" : "Analyse transcript"}
                   </Button>
                 </Box>
               </>
             )}
 
-            {/* ── Document upload ─────────────────────────────────────────── */}
+            {/* ── Document ── */}
             {inputMode === "document" && (
               <>
                 <Alert severity="info" icon={false} sx={{ py: 0.75 }}>
                   <Typography variant="caption">
-                    The entry type above is a hint — the AI will detect the actual type from the document content
-                    and update it automatically. You can also change it on the review screen before saving.
+                    AI detects the entry type from the document — you can change it on the review screen.
                   </Typography>
                 </Alert>
-                <DocumentUploadZone
-                  entryType={type}
-                  project={project || undefined}
-                  module={module || undefined}
-                  onResult={handleDocumentResult}
-                />
+                <DocumentUploadZone entryType={type}
+                  project={project || undefined} module={module || undefined}
+                  onResult={handleDocumentResult} />
               </>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* ── Step 1: Follow-up questions (text flow only) ───────────────────── */}
+      {/* ── Step 1: Selective follow-up ──────────────────────────────────── */}
       {step === 1 && captureSession && (
         <Card variant="outlined" sx={{ borderRadius: 3 }}>
           <CardContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2.5 }}>
-            <Alert severity="info" icon={false}>
-              <Typography variant="subtitle2" gutterBottom>
-                Some information appears to be missing. Please answer the questions below.
+            {/* Header */}
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                A few details would improve this entry
               </Typography>
-              <Stack spacing={1} mt={1}>
-                {captureSession.followUpQuestions.map((q, i) => (
-                  <Box key={i} sx={{ display: "flex", gap: 1 }}>
-                    <Chip label={captureSession.missingFields[i] ?? "?"} size="small"
-                      sx={{ bgcolor: "#fff0eb", color: "#a05030", fontWeight: 700 }} />
-                    <Typography variant="body2">{q}</Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </Alert>
-
-            <Box sx={{ bgcolor: "#f5f8f6", borderRadius: 2, p: 2 }}>
-              <Typography variant="caption" color="text.secondary" gutterBottom display="block">
-                Your note so far
-              </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                {captureSession.currentInput}
+              <Typography variant="body2" color="text.secondary">
+                Select the questions you can answer. You can skip any you don't know yet —
+                the entry will still be created with what you've provided.
+                {captureSession.round >= 2 && (
+                  <strong> This is the last round of questions.</strong>
+                )}
               </Typography>
             </Box>
 
-            <TextField
-              label="Your answers to the questions above"
-              multiline minRows={4} fullWidth
-              value={followUpText}
-              onChange={e => setFollowUpText(e.target.value)}
-              placeholder="Add the missing details here…"
-            />
+            {/* Note so far — collapsible */}
+            <details style={{ background: "#f5f8f6", borderRadius: 10, padding: "12px 14px" }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#5a6b65" }}>
+                Your note so far
+              </summary>
+              <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap", color: "text.secondary" }}>
+                {captureSession.currentInput}
+              </Typography>
+            </details>
 
-            {textErr && <Alert severity="error">{textErr.message}</Alert>}
+            {/* Per-question selectable cards */}
+            <Stack spacing={1.5}>
+              {captureSession.followUpQuestions.map((question, i) => {
+                const selected = selectedIdxs.includes(i);
+                const field    = captureSession.missingFields[i] ?? `field_${i}`;
+                return (
+                  <Card
+                    key={i}
+                    variant="outlined"
+                    onClick={() => !selected && toggleQuestion(i)}
+                    sx={{
+                      borderRadius: 2,
+                      borderColor: selected ? "#1e4d42" : "divider",
+                      bgcolor:     selected ? alpha("#1e4d42", 0.03) : "#fff",
+                      cursor:      selected ? "default" : "pointer",
+                      transition:  "all .12s",
+                      "&:hover": selected ? {} : {
+                        borderColor: "#1e4d42",
+                        bgcolor: alpha("#1e4d42", 0.025),
+                      },
+                    }}
+                  >
+                    <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                      {/* Question header */}
+                      <Stack direction="row" alignItems="center" spacing={1} mb={selected ? 1.5 : 0}>
+                        {/* Checkbox-style indicator */}
+                        <Box sx={{
+                          width: 20, height: 20, borderRadius: 1, flexShrink: 0,
+                          border: "2px solid", borderColor: selected ? "#1e4d42" : "#c8d6d0",
+                          bgcolor: selected ? "#1e4d42" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {selected && (
+                            <CheckCircleOutlineIcon sx={{ fontSize: 14, color: "#fff" }} />
+                          )}
+                        </Box>
+                        <Chip label={field} size="small"
+                          sx={{ bgcolor: "#fff0eb", color: "#a05030", fontWeight: 700, fontSize: 10 }} />
+                        <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
+                          {question}
+                        </Typography>
+                        {selected && (
+                          <Button size="small" variant="text" color="error"
+                            onClick={e => { e.stopPropagation(); toggleQuestion(i); setFieldAnswers(p => { const n = {...p}; delete n[i]; return n; }); }}
+                            sx={{ minWidth: 0, px: 0.5, fontSize: 11 }}>
+                            Deselect
+                          </Button>
+                        )}
+                      </Stack>
 
+                      {/* Textarea — only visible when selected */}
+                      <Collapse in={selected}>
+                        <TextField
+                          autoFocus={selectedIdxs[selectedIdxs.length - 1] === i}
+                          multiline minRows={3} fullWidth size="small"
+                          placeholder={`Your answer about ${field}…`}
+                          value={fieldAnswers[i] ?? ""}
+                          onChange={e => {
+                            e.stopPropagation();
+                            setFieldAnswers(p => ({ ...p, [i]: e.target.value }));
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          sx={{ mt: 0.5 }}
+                        />
+                      </Collapse>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
+
+            {err && <Alert severity="error">{(err as Error).message}</Alert>}
+
+            {/* Actions */}
             <Stack direction="row" spacing={2} justifyContent="space-between">
               <Button variant="text" onClick={() => setStep(0)}>← Back</Button>
               <Stack direction="row" spacing={1}>
-                <Button variant="outlined" disabled={textBusy}
+                {/* Skip all — always available */}
+                <Button variant="outlined" disabled={busy}
                   onClick={() => analyzeNote.mutate(captureSession.currentInput)}>
-                  Skip & analyse anyway
+                  Skip all & analyse
                 </Button>
-                <Button variant="contained" disabled={textBusy || !followUpText.trim()}
-                  onClick={() => addFollowUp.mutate()}
-                  sx={{ bgcolor: "#345f54", "&:hover": { bgcolor: "#2b4f46" }, fontWeight: 700 }}
-                  startIcon={textBusy ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
+                {/* Submit selected — only active when at least one answer is written */}
+                <Button
+                  variant="contained"
+                  disabled={busy || !answeredAny}
+                  onClick={() => submitAnswers.mutate()}
+                  sx={{ bgcolor: "#1e4d42", "&:hover": { bgcolor: "#173d34" }, fontWeight: 700 }}
+                  startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <CheckCircleOutlineIcon />}
                 >
-                  {textBusy ? "Checking…" : "Submit & check again"}
+                  {busy
+                    ? "Checking…"
+                    : `Submit ${selectedIdxs.filter(i => fieldAnswers[i]?.trim()).length} answer${selectedIdxs.filter(i => fieldAnswers[i]?.trim()).length !== 1 ? "s" : ""}`}
                 </Button>
               </Stack>
             </Stack>
